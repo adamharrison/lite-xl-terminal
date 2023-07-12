@@ -1,0 +1,20 @@
+{
+  "addons": [{
+    "id": "terminal",
+    "description": "An integrated terminal for lite-xl.",
+    "path": "plugins/terminal",
+    "files": [{
+      "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.x86_64-linux.so",
+      "arch": "x86_64-linux",
+      "checksum": "SKIP"
+    }, {
+      "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.x86_64-darwin.so",
+      "arch": "x86_64-darwin",
+      "checksum": "SKIP"
+    }, {
+      "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.x86_64-windows.dll",
+      "arch": "x86_64-windows",
+      "checksum": "SKIP"
+    }]
+  }]
+}
