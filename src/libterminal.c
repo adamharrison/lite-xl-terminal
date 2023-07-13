@@ -157,7 +157,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           terminal->cursor_y = 0;
         } else {
           terminal->cursor_x = parse_number(&seq[2], 1) - 1;
-          terminal->cursor_y = parse_number(&seq[semicolon+1], 1);
+          terminal->cursor_y = parse_number(&seq[semicolon+1], 1) - 1;
         }
       break;
       case 'J':  {
@@ -188,7 +188,9 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         switch (seq[2]) {
           case '1': memset(&buffer[terminal->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->cursor_x);     break;
           case '2': memset(&buffer[terminal->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);      break;
-          default: memset(&buffer[terminal->cursor_y * terminal->columns + terminal->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - terminal->cursor_x));  break;
+          default:
+            memset(&buffer[terminal->cursor_y * terminal->columns + terminal->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - terminal->cursor_x));
+          break;
         }
       } break;
       case 'm': {
@@ -223,7 +225,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
       escape_type = get_terminal_escape_type(terminal->buffered_sequence[1]);
   }
   while (offset < len) {
-    fprintf(stderr, "CHR: %d (%c) %d %d\n", str[offset], str[offset], terminal->cursor_x, terminal->cursor_y);
     if (buffered_sequence_index) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
       if (escape_type == ESCAPE_TYPE_OPEN)
@@ -254,11 +255,10 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x09:
         case '\n': {
           terminal->cursor_x = 0;
-          if (terminal->cursor_y < terminal->lines)
+          if (terminal->cursor_y < terminal->lines - 1)
             ++terminal->cursor_y;
           else
             terminal_shift_front_buffer(terminal);
-          fprintf(stderr, "SHIFT\n");
         } break;
         case 0x0B:
         case 0x0C:
@@ -292,7 +292,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
           terminal->front_buffer[terminal->cursor_y * terminal->columns + terminal->cursor_x] = (buffer_char_t){ terminal->cursor_styling, codepoint };
           if (terminal->cursor_x++ > terminal->columns) {
             terminal->cursor_x = 0;
-            if (terminal->cursor_y < terminal->lines)
+            if (terminal->cursor_y < terminal->lines - 1)
               ++terminal->cursor_y;
             else
               terminal_shift_front_buffer(terminal);
@@ -357,7 +357,6 @@ static terminal_t* terminal_new(int columns, int lines, const char* pathname, co
 
 static int f_terminal_lines(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  sleep(1);
   buffer_char_t* buffer = terminal->view == VIEW_FRONT_BUFFER ? terminal->front_buffer : terminal->back_buffer;
   if (terminal_update(terminal))
     return 0;
@@ -370,13 +369,16 @@ static int f_terminal_lines(lua_State* L) {
       char text_buffer[1024] = {0};
       for (int y = 0; y < terminal->lines; ++y) {
         lua_newtable(L);
+        lua_newtable(L);
         text_buffer[0] = 0;
         int x;
+        int group = 0;
         for (x = 0; x < terminal->columns && buffer[y * terminal->columns + x].codepoint; ++x)
           text_buffer[x] = (char)buffer[y * terminal->columns + x].codepoint;
         text_buffer[x] = 0;
         lua_pushstring(L, text_buffer);
         lua_setfield(L, -2, "text");
+        lua_rawseti(L, -2, group + 1);
         lua_rawseti(L, -2, y + 1);
       }
     break;
@@ -389,7 +391,6 @@ static int f_terminal_lines(lua_State* L) {
 
 static int f_terminal_input(lua_State* L) {
   size_t len;
-  sleep(1);
   const char* str = luaL_checklstring(L, 2, &len);
   terminal_input(*(terminal_t**)lua_touserdata(L, 1), str, (int)len);
   return 0;
@@ -445,6 +446,13 @@ static int f_terminal_exited(lua_State* L) {
   return 1;
 }
 
+static int f_terminal_cursor(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  lua_pushinteger(L, terminal->cursor_x);
+  lua_pushinteger(L, terminal->cursor_y);
+  return 2;
+}
+
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc       },
   { "new",           f_terminal_new      },
@@ -453,6 +461,7 @@ static const luaL_Reg terminal_api[] = {
   { "resize",        f_terminal_resize   },
   { "update",        f_terminal_update   },
   { "exited",        f_terminal_exited   },
+  { "cursor",        f_terminal_cursor   },
   { NULL,            NULL                }
 };
 
