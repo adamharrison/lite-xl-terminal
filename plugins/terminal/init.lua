@@ -12,6 +12,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 config.plugins.terminal = common.merge({
   shell = "bash",
+  scrollback_limit = 10000,
   colors = {
     [  0] = { common.color "#000000" }, [  1] = { common.color "#800000" }, [  2] = { common.color "#008000" }, [  3] = { common.color "#808000" }, [  4] = { common.color "#000080" },
     [  5] = { common.color "#800080" }, [  6] = { common.color "#008080" }, [  7] = { common.color "#c0c0c0" }, [  8] = { common.color "#808080" }, [  9] = { common.color "#ff0000" },
@@ -88,7 +89,7 @@ function TerminalView:update()
     self.rows = math.floor(self.size.y / style.code_font:get_height())
     if self.rows > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.rows, config.plugins.terminal.shell, {})
+        self.terminal = terminal_native.new(self.columns, self.rows, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, {})
       else
         self.terminal:resize(self.columns, self.rows)
         self.last_size = { x = self.size.x, y = self.size.y }
@@ -112,7 +113,7 @@ function TerminalView:draw()
     local lh = style.code_font:get_height()
     for i, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + style.padding.x
-      if core.active_view == self and i - 1 == cursor_y then
+      if core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then
         renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
       end
       for i = 1, #line, 2 do
@@ -148,11 +149,11 @@ command.add(TerminalView, {
   ["terminal:return"] = function() view.terminal:input("\n"); end,
   ["terminal:pageup"] = function() view.terminal:scrollback(view.terminal:scrollback() + self.columns) end,
   ["terminal:pagedown"] = function() view.terminal:scrollback(view.terminal:scrollback() - self.columns) end,
-  ["terminal:lineup"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() + (amount or 1)) end,
-  ["terminal:linedown"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() - (amount or 1)) end,
-  ["terminal:break"] = function() view.terminal:brk() end,
-  ["terminal:suspend"] = function() view.terminal:suspend() end,
+  ["terminal:scroll"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() + (amount or 1)) end,
+  ["terminal:break"] = function() view.terminal:input("\x7F") end,
+  ["terminal:suspend"] = function() view.terminal:input("\x1A") end,
   ["terminal:redraw"] = function() view.terminal:redraw() end,
+  ["terminal:tab"] = function() view.terminal:input("\t") end
 });
 
 keymap.add {
@@ -161,8 +162,8 @@ keymap.add {
   ["ctrl+l"] = "terminal:redraw",
   ["ctrl+z"] = "terminal:suspend",
   ["ctrl+c"] = "terminal:break",
-  ["wheelup"] = "terminal:lineup",
-  ["wheeldown"] = "terminal:linedown"
+  ["wheel"] = "terminal:scroll",
+  ["tab"] = "terminal:tab"
 }
 
 return {

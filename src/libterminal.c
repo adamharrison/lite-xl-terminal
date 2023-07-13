@@ -73,8 +73,7 @@ typedef struct buffer_char_t {
 typedef struct backbuffer_page_t {
   struct backbuffer_page_t* prev;
   struct backbuffer_page_t* next;
-  unsigned int columns, lines;
-  int line;
+  int columns, lines, line;
   buffer_char_t buffer[];
 } backbuffer_page_t;
 
@@ -88,13 +87,14 @@ typedef enum {
 typedef struct {
   backbuffer_page_t* scrollback_buffer; // Beginning of linked list.
   backbuffer_page_t* scrollback_target; // Target based on scrollback_position.
-  unsigned int scrollback_target_offset;
-  unsigned int total_scrollback_lines;  // Cached total amount of lines we can scroll bcak.
-  unsigned int scrollback_position;     // Canonical amount of lines we've scrolled back.
-  unsigned int columns, lines;
+  int scrollback_target_offset;
+  int total_scrollback_lines;  // Cached total amount of lines we can scroll bcak.
+  int scrollback_position;     // Canonical amount of lines we've scrolled back.
+  int scrollback_limit;
+  int columns, lines;
   buffer_char_t* buffers[VIEW_MAX];     // Normally just two buffers, normal, and alternate.
   EView view;
-  unsigned int cursor_x, cursor_y;
+  int cursor_x, cursor_y;
   buffer_styling_t cursor_styling;      // What characters are currently being emitted as.
   int master;                           // FD for pty.
   pid_t pid;                            // pid for shell.
@@ -120,35 +120,45 @@ static int utf8_to_codepoint(const char *p, unsigned *dst) {
 }
 
 static int terminal_scrollback(terminal_t* terminal, int target) {
-  if (!terminal->scrollback_buffer)
+  if (!terminal->scrollback_buffer || target == 0) {
+    terminal->scrollback_target = NULL;
+    terminal->scrollback_target_offset = 0;
+    terminal->scrollback_position = 0;
     return 0;
+  }
   backbuffer_page_t* current = terminal->scrollback_buffer;
-  int current_offset = current->line;
+  int current_offset = current->lines;
   if (terminal->scrollback_target) {
     current = terminal->scrollback_target;
     current_offset = terminal->scrollback_target_offset;
   }
   while (target > current_offset) {
     if (!current->prev) {
+      if (current->line < current->lines)
+        current_offset -= (current->lines - current->line);
       terminal->scrollback_target_offset = current_offset;
       terminal->scrollback_target = current;
+      terminal->scrollback_position = current_offset;
       return current_offset;
     }
     current = current->prev;
-    current_offset += current->line;
+    current_offset += current->lines;
   }
-  while (target < (current_offset - current->line)) {
+  while (target < (current_offset - current->lines)) {
     if (!current->next) {
       terminal->scrollback_target = NULL;
       terminal->scrollback_target_offset = 0;
+      terminal->scrollback_position = 0;
       return 0;
     }
-    current_offset -= current->line;
+    current_offset -= current->lines;
     current = current->next;
   }
   terminal->scrollback_target = current;
   terminal->scrollback_target_offset = current_offset;
-  return current_offset;
+  terminal->scrollback_position = min(target, (current_offset - (current->lines - current->line)));
+  assert(terminal->scrollback_position >= 0);
+  return terminal->scrollback_position;
 }
 
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
@@ -179,10 +189,13 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     page->lines = terminal->lines;
     page->columns = terminal->columns;
     page->line = 0;
+    fprintf(stderr, "SPAWNED BUFFER\n");
   }
-  memcpy(&terminal->scrollback_buffer->buffer[(terminal->scrollback_buffer->lines - (terminal->scrollback_buffer->line++) - 1) * terminal->columns], &terminal->buffers[VIEW_NORMAL_BUFFER][0], sizeof(buffer_char_t) * terminal->columns);
+  memcpy(&terminal->scrollback_buffer->buffer[terminal->scrollback_buffer->line * terminal->columns], &terminal->buffers[VIEW_NORMAL_BUFFER][0], sizeof(buffer_char_t) * terminal->columns);
   memmove(&terminal->buffers[VIEW_NORMAL_BUFFER][0], &terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
   memset(&terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+  terminal->scrollback_buffer->line++;
+  fprintf(stderr, "LINES IN BACK BUFFER: %d\n", terminal->scrollback_buffer->line);
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, EView view) {
@@ -203,11 +216,13 @@ typedef enum terminal_escape_type_e {
 } terminal_escape_type_e;
 
 static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e type, const char* seq) {
+  #ifdef LIBTERMINAL_DEBUG_ESCAPE
   fprintf(stderr, "ESC");
   for (int i = 1; i < strlen(seq); ++i) {
     fprintf(stderr, "%c", seq[i]);
   }
   fprintf(stderr, "\n");
+  #endif
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
     switch (seq[seq_end]) {
@@ -399,6 +414,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             --terminal->cursor_x;
         } break;
         case 0x09:
+        break;
         case '\n': {
           terminal->cursor_x = 0;
           if (terminal->cursor_y < terminal->lines - 1)
@@ -408,6 +424,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         } break;
         case 0x0B:
         case 0x0C:
+        break;
         case '\r': {
           terminal->cursor_x = 0;
         } break;
@@ -483,17 +500,21 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   }
 }
 
-static terminal_t* terminal_new(int columns, int lines, const char* pathname, const char** argv) {
+static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* pathname, const char** argv) {
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
   struct termios term = {0};
-  term.c_lflag |= ECHO;
+  term.c_cc[VINTR] = 127;
+  term.c_cc[VSUSP] = 26;
+  term.c_lflag |= ECHO | ISIG;
   terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
+  terminal->scrollback_limit = scrollback_limit;
   if (terminal->pid == -1) {
     free(terminal);
     return NULL;
   }
   if (!terminal->pid) {
     setenv("TERM", "xterm-256color", 1);
+    setsid();
     execvp(pathname,  (char** const)argv);
     exit(-1);
     return NULL;
@@ -536,11 +557,11 @@ static int f_terminal_lines(lua_State* L) {
 
   int total_lines = 0;
   int remaining_lines = terminal->lines;
-  if (terminal->view == VIEW_NORMAL_BUFFER) {
-    backbuffer_page_t* current_backbuffer = terminal->scrollback_buffer;
-    int lines_into_buffer = terminal->scrollback_target_offset - terminal->scrollback_position;
+  if (terminal->view == VIEW_NORMAL_BUFFER && terminal->scrollback_target) {
+    backbuffer_page_t* current_backbuffer = terminal->scrollback_target;
+    int lines_into_buffer = terminal->scrollback_target_offset - terminal->scrollback_position - (current_backbuffer->lines - current_backbuffer->line);
     while (current_backbuffer) {
-      for (int y = lines_into_buffer; y < current_backbuffer->lines; ++y) {
+      for (int y = lines_into_buffer; y < current_backbuffer->line; ++y) {
         output_line(L, &current_backbuffer->buffer[y * current_backbuffer->columns], &current_backbuffer->buffer[(y+1) * current_backbuffer->columns]);
         lua_rawseti(L, -2, ++total_lines);
         if (remaining_lines == 0)
@@ -570,7 +591,8 @@ static int f_terminal_input(lua_State* L) {
 static int f_terminal_new(lua_State* L) {
   int x = luaL_checkinteger(L, 1);
   int y = luaL_checkinteger(L, 2);
-  const char* path = luaL_checkstring(L, 3);
+  int scrollback_limit = luaL_checkinteger(L, 3);
+  const char* path = luaL_checkstring(L, 4);
   char* arguments[256] = {0};
   if (lua_type(L, 4) == LUA_TTABLE) {
     for (int i = 0; i < 256; ++i) {
@@ -585,7 +607,7 @@ static int f_terminal_new(lua_State* L) {
       }
     }
   }
-  terminal_t* terminal = terminal_new(x, y, path, (const char**)arguments);
+  terminal_t* terminal = terminal_new(x, y, scrollback_limit, path, (const char**)arguments);
   terminal_t** pointer = lua_newuserdata(L, sizeof(terminal_t*));
   *pointer = terminal;
   luaL_setmetatable(L, "libterminal");
