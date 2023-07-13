@@ -486,6 +486,11 @@ static void terminal_free(terminal_t* terminal) {
     if (terminal->buffers[i])
       free(terminal->buffers[i]);
   }
+  if (terminal->pid) {
+    close(terminal->master);
+    int status;
+    waitpid(terminal->pid, &status, 0);
+  }
   free(terminal);
 }
 
