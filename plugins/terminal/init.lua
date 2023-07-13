@@ -86,12 +86,12 @@ end
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
     self.columns = math.floor(self.size.x / style.code_font:get_width("W"))
-    self.rows = math.floor(self.size.y / style.code_font:get_height())
-    if self.rows > 0 and self.columns > 0 then
+    self.lines = math.floor(self.size.y / style.code_font:get_height())
+    if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.rows, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, {})
+        self.terminal = terminal_native.new(self.columns, self.lines, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, {})
       else
-        self.terminal:resize(self.columns, self.rows)
+        self.terminal:resize(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }
       end
     end
@@ -134,6 +134,7 @@ end
 function TerminalView:on_text_input(text)
   if self.terminal then
     self.terminal:input(text)
+    if view.terminal:scrollback() ~= 0 then view.terminal:scrollback(0) end
     core.redraw = true
     return true
   end
@@ -147,8 +148,8 @@ view.node = node:split("down", view, { y = true }, true)
 command.add(TerminalView, {
   ["terminal:backspace"] = function() view.terminal:input("\b"); end,
   ["terminal:return"] = function() view.terminal:input("\n"); end,
-  ["terminal:pageup"] = function() view.terminal:scrollback(view.terminal:scrollback() + self.columns) end,
-  ["terminal:pagedown"] = function() view.terminal:scrollback(view.terminal:scrollback() - self.columns) end,
+  ["terminal:pageup"] = function() view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
+  ["terminal:pagedown"] = function() view.terminal:scrollback(view.terminal:scrollback() - view.lines) end,
   ["terminal:scroll"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() view.terminal:input("\x1A") end,
@@ -163,7 +164,9 @@ keymap.add {
   ["ctrl+z"] = "terminal:suspend",
   ["ctrl+c"] = "terminal:break",
   ["wheel"] = "terminal:scroll",
-  ["tab"] = "terminal:tab"
+  ["tab"] = "terminal:tab",
+  ["shift+pageup"] = "terminal:pageup",
+  ["shift+pagedown"] = "terminal:pagedown"
 }
 
 return {

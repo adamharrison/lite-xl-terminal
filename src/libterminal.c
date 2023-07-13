@@ -85,12 +85,12 @@ typedef enum {
 
 
 typedef struct {
-  backbuffer_page_t* scrollback_buffer; // Beginning of linked list.
-  backbuffer_page_t* scrollback_target; // Target based on scrollback_position.
-  int scrollback_target_offset;
-  int total_scrollback_lines;  // Cached total amount of lines we can scroll bcak.
-  int scrollback_position;     // Canonical amount of lines we've scrolled back.
-  int scrollback_limit;
+  backbuffer_page_t* scrollback_buffer;    // Beginning of linked list.
+  backbuffer_page_t* scrollback_target;    // Target based on scrollback_position.
+  int scrollback_target_top_offset;        // The offset that the top of the scrollback_target page is from the start of the buffer..
+  int total_scrollback_lines;              // Cached total amount of lines we can scroll bcak.
+  int scrollback_position;                 // Canonical amount of lines we've scrolled back.
+  int scrollback_limit;                    // The amount of lines we'll hold in memory maximum.
   int columns, lines;
   buffer_char_t* buffers[VIEW_MAX];     // Normally just two buffers, normal, and alternate.
   EView view;
@@ -120,43 +120,45 @@ static int utf8_to_codepoint(const char *p, unsigned *dst) {
 }
 
 static int terminal_scrollback(terminal_t* terminal, int target) {
-  if (!terminal->scrollback_buffer || target == 0) {
+  if (!terminal->scrollback_buffer || target <= 0) {
     terminal->scrollback_target = NULL;
-    terminal->scrollback_target_offset = 0;
     terminal->scrollback_position = 0;
+    terminal->scrollback_target_top_offset = 0;
     return 0;
   }
-  backbuffer_page_t* current = terminal->scrollback_buffer;
-  int current_offset = current->lines;
+  backbuffer_page_t* current = NULL;
+  int current_top_offset = 0;
   if (terminal->scrollback_target) {
     current = terminal->scrollback_target;
-    current_offset = terminal->scrollback_target_offset;
+    current_top_offset = terminal->scrollback_target_top_offset;
   }
-  while (target > current_offset) {
-    if (!current->prev) {
-      if (current->line < current->lines)
-        current_offset -= (current->lines - current->line);
-      terminal->scrollback_target_offset = current_offset;
-      terminal->scrollback_target = current;
-      terminal->scrollback_position = current_offset;
-      return current_offset;
+  while (target > current_top_offset) {
+    if (!current) {
+      current = terminal->scrollback_buffer;
+      current_top_offset = current->line;
+    } else {
+      if (!current->prev) {
+        terminal->scrollback_target = current;
+        terminal->scrollback_position = current_top_offset;
+        return current_top_offset;
+      }
+      current = current->prev;
+      current_top_offset += current->line;
     }
-    current = current->prev;
-    current_offset += current->lines;
   }
-  while (target < (current_offset - current->lines)) {
+  while (target < (current_top_offset - current->line)) {
     if (!current->next) {
       terminal->scrollback_target = NULL;
-      terminal->scrollback_target_offset = 0;
       terminal->scrollback_position = 0;
+      terminal->scrollback_target_top_offset = 0;
       return 0;
     }
-    current_offset -= current->lines;
+    current_top_offset -= current->line;
     current = current->next;
   }
   terminal->scrollback_target = current;
-  terminal->scrollback_target_offset = current_offset;
-  terminal->scrollback_position = min(target, (current_offset - (current->lines - current->line)));
+  terminal->scrollback_target_top_offset = current_top_offset;
+  terminal->scrollback_position = target;
   assert(terminal->scrollback_position >= 0);
   return terminal->scrollback_position;
 }
@@ -174,7 +176,7 @@ static void terminal_clear_scrollback_buffer(terminal_t* terminal) {
   }
   terminal->scrollback_buffer = NULL;
   terminal->scrollback_target = NULL;
-  terminal->scrollback_target_offset = 0;
+  terminal->scrollback_target_top_offset = 0;
 }
 
 static void terminal_shift_buffer(terminal_t* terminal) {
@@ -189,13 +191,11 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     page->lines = terminal->lines;
     page->columns = terminal->columns;
     page->line = 0;
-    fprintf(stderr, "SPAWNED BUFFER\n");
   }
   memcpy(&terminal->scrollback_buffer->buffer[terminal->scrollback_buffer->line * terminal->columns], &terminal->buffers[VIEW_NORMAL_BUFFER][0], sizeof(buffer_char_t) * terminal->columns);
   memmove(&terminal->buffers[VIEW_NORMAL_BUFFER][0], &terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
   memset(&terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
   terminal->scrollback_buffer->line++;
-  fprintf(stderr, "LINES IN BACK BUFFER: %d\n", terminal->scrollback_buffer->line);
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, EView view) {
@@ -559,7 +559,7 @@ static int f_terminal_lines(lua_State* L) {
   int remaining_lines = terminal->lines;
   if (terminal->view == VIEW_NORMAL_BUFFER && terminal->scrollback_target) {
     backbuffer_page_t* current_backbuffer = terminal->scrollback_target;
-    int lines_into_buffer = terminal->scrollback_target_offset - terminal->scrollback_position - (current_backbuffer->lines - current_backbuffer->line);
+    int lines_into_buffer = terminal->scrollback_target_top_offset - terminal->scrollback_position;
     while (current_backbuffer) {
       for (int y = lines_into_buffer; y < current_backbuffer->line; ++y) {
         output_line(L, &current_backbuffer->buffer[y * current_backbuffer->columns], &current_backbuffer->buffer[(y+1) * current_backbuffer->columns]);
