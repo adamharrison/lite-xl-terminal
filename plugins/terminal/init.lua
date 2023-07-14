@@ -13,6 +13,9 @@ local terminal_native = require "plugins.terminal.libterminal"
 config.plugins.terminal = common.merge({
   shell = "bash",
   scrollback_limit = 10000,
+  font = style.code_font,
+  background = { common.color "#000000" },
+  text = { common.color "#FFFFFF" },
   colors = {
     [  0] = { common.color "#000000" }, [  1] = { common.color "#800000" }, [  2] = { common.color "#008000" }, [  3] = { common.color "#808000" }, [  4] = { common.color "#000080" },
     [  5] = { common.color "#800080" }, [  6] = { common.color "#008080" }, [  7] = { common.color "#c0c0c0" }, [  8] = { common.color "#808080" }, [  9] = { common.color "#ff0000" },
@@ -68,6 +71,7 @@ config.plugins.terminal = common.merge({
     [255] = { common.color "#eeeeee" }
   }
 }, config.plugins.terminal)
+if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = style.code_font:copy(style.code_font:get_size(), { smoothing = true }) end
 
 
 local TerminalView = View:extend()
@@ -104,7 +108,7 @@ end
 
 
 function TerminalView:draw()
-  TerminalView.super.draw_background(self, style.background3)
+  TerminalView.super.draw_background(self, config.plugins.terminal.background)
   if self.terminal then
     local cursor_x, cursor_y = self.terminal:cursor()
     local space_width = style.code_font:get_width(" ")
@@ -117,13 +121,14 @@ function TerminalView:draw()
         renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
       end
       for i = 1, #line, 2 do
-        local foreground_idx, background_idx = (line[i] >> 16) & 0xFF, (line[i] >> 8) & 0xFF
+        local foreground_idx, background_idx, style_idx = (line[i] >> 16) & 0xFF, (line[i] >> 8) & 0xFF, line[i] & 0x0F
         local foreground, background = foreground_idx ~= 0 and config.plugins.terminal.colors[foreground_idx], background_idx ~= 0 and config.plugins.terminal.colors[background_idx]
         local text = line[i+1]
+        local font = ((style_idx & 0x1) ~= 0) and config.plugins.terminal.bold_font or config.plugins.terminal.font
         if background then
-          renderer.draw_rect(x, y, style.code_font:get_width(text), lh, background)
+          renderer.draw_rect(x, y, font:get_width(text), lh, background)
         end
-        x = renderer.draw_text(style.code_font, text, x, y, foreground or style.text)
+        x = renderer.draw_text(font, text, x, y, foreground or config.plugins.terminal.text)
       end
       y = y + lh
     end
@@ -154,7 +159,9 @@ command.add(TerminalView, {
   ["terminal:break"] = function() view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() view.terminal:input("\x1A") end,
   ["terminal:redraw"] = function() view.terminal:redraw() end,
-  ["terminal:tab"] = function() view.terminal:input("\t") end
+  ["terminal:tab"] = function() view.terminal:input("\t") end,
+  ["terminal:paste"] = function() view.terminal:input(system.get_clipboard()) end,
+  ["terminal:copy"] = function() end
 });
 
 keymap.add {
@@ -163,6 +170,8 @@ keymap.add {
   ["ctrl+l"] = "terminal:redraw",
   ["ctrl+z"] = "terminal:suspend",
   ["ctrl+c"] = "terminal:break",
+  ["ctrl+shift+c"] = "terminal:copy",
+  ["ctrl+shift+v"] = "terminal:paste",
   ["wheel"] = "terminal:scroll",
   ["tab"] = "terminal:tab",
   ["shift+pageup"] = "terminal:pageup",

@@ -26,6 +26,8 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 3. Configurable color support.
 4. Signal characters.
 5. Configurable shell.
+6. Selecting from terminal.
+7. Copying from terminal.
 
 Ships with bash, for windows; assumes that Mac and Linux already have bash.
 

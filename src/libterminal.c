@@ -83,6 +83,12 @@ typedef enum {
   VIEW_MAX = 2
 } EView;
 
+typedef struct view_t {
+  buffer_char_t* buffer;
+  int cursor_x, cursor_y;
+  buffer_styling_t cursor_styling; // What characters are currently being emitted as.
+} view_t;
+
 
 typedef struct {
   backbuffer_page_t* scrollback_buffer;    // Beginning of linked list.
@@ -92,12 +98,10 @@ typedef struct {
   int scrollback_position;                 // Canonical amount of lines we've scrolled back.
   int scrollback_limit;                    // The amount of lines we'll hold in memory maximum.
   int columns, lines;
-  buffer_char_t* buffers[VIEW_MAX];     // Normally just two buffers, normal, and alternate.
-  EView view;
-  int cursor_x, cursor_y;
-  buffer_styling_t cursor_styling;      // What characters are currently being emitted as.
-  int master;                           // FD for pty.
-  pid_t pid;                            // pid for shell.
+  EView current_view;
+  view_t views[VIEW_MAX];                  // Normally just two buffers, normal, and alternate.
+  int master;                              // FD for pty.
+  pid_t pid;                               // pid for shell.
   char buffered_sequence[LIBTERMINAL_CHUNK_SIZE];
 } terminal_t;
 
@@ -180,7 +184,7 @@ static void terminal_clear_scrollback_buffer(terminal_t* terminal) {
 }
 
 static void terminal_shift_buffer(terminal_t* terminal) {
-  assert(terminal->view == VIEW_NORMAL_BUFFER);
+  assert(terminal->current_view == VIEW_NORMAL_BUFFER);
   if (!terminal->scrollback_buffer || terminal->scrollback_buffer->columns != terminal->columns || terminal->scrollback_buffer->lines != terminal->lines || terminal->scrollback_buffer->line >= terminal->scrollback_buffer->lines) {
     backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
     backbuffer_page_t* prev = terminal->scrollback_buffer;
@@ -192,14 +196,14 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     page->columns = terminal->columns;
     page->line = 0;
   }
-  memcpy(&terminal->scrollback_buffer->buffer[terminal->scrollback_buffer->line * terminal->columns], &terminal->buffers[VIEW_NORMAL_BUFFER][0], sizeof(buffer_char_t) * terminal->columns);
-  memmove(&terminal->buffers[VIEW_NORMAL_BUFFER][0], &terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
-  memset(&terminal->buffers[VIEW_NORMAL_BUFFER][terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+  memcpy(&terminal->scrollback_buffer->buffer[terminal->scrollback_buffer->line * terminal->columns], &terminal->views[VIEW_NORMAL_BUFFER].buffer[0], sizeof(buffer_char_t) * terminal->columns);
+  memmove(&terminal->views[VIEW_NORMAL_BUFFER].buffer[0], &terminal->views[VIEW_NORMAL_BUFFER].buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
+  memset(&terminal->views[VIEW_NORMAL_BUFFER].buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
   terminal->scrollback_buffer->line++;
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, EView view) {
-  terminal->view = view;
+  terminal->current_view = view;
 }
 
 static int parse_number(const char* seq, int def) {
@@ -212,7 +216,8 @@ typedef enum terminal_escape_type_e {
   ESCAPE_TYPE_NONE,
   ESCAPE_TYPE_OPEN,
   ESCAPE_TYPE_CSI,
-  ESCAPE_TYPE_OS
+  ESCAPE_TYPE_OS,
+  ESCAPE_TYPE_UNKNOWN
 } terminal_escape_type_e;
 
 static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e type, const char* seq) {
@@ -223,57 +228,58 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   }
   fprintf(stderr, "\n");
   #endif
+  view_t* view = &terminal->views[terminal->current_view];
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
     switch (seq[seq_end]) {
-      case 'A': terminal->cursor_y = max(terminal->cursor_y - parse_number(&seq[2], 1), 0);     break;
-      case 'B': terminal->cursor_y = min(terminal->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); break;
-      case 'C': terminal->cursor_x = min(terminal->cursor_x + parse_number(&seq[2], 1), terminal->columns - 1); break;
-      case 'D': terminal->cursor_x = max(terminal->cursor_x - parse_number(&seq[2], 1), 0); break;
-      case 'E': terminal->cursor_y = min(terminal->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); terminal->cursor_x = 0; break;
-      case 'F': terminal->cursor_y = min(terminal->cursor_y - parse_number(&seq[2], 1), 0); terminal->cursor_x = 0; break;
-      case 'G': terminal->cursor_x = parse_number(&seq[2], 1); break;
+      case 'A': view->cursor_y = max(view->cursor_y - parse_number(&seq[2], 1), 0);     break;
+      case 'B': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); break;
+      case 'C': view->cursor_x = min(view->cursor_x + parse_number(&seq[2], 1), terminal->columns - 1); break;
+      case 'D': view->cursor_x = max(view->cursor_x - parse_number(&seq[2], 1), 0); break;
+      case 'E': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); view->cursor_x = 0; break;
+      case 'F': view->cursor_y = min(view->cursor_y - parse_number(&seq[2], 1), 0); view->cursor_x = 0; break;
+      case 'G': view->cursor_x = parse_number(&seq[2], 1); break;
       case 'H':
         int semicolon = -1;
         for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
         if (seq[semicolon] != ';') {
-          terminal->cursor_x = 0;
-          terminal->cursor_y = 0;
+          view->cursor_x = 0;
+          view->cursor_y = 0;
         } else {
-          terminal->cursor_x = parse_number(&seq[2], 1) - 1;
-          terminal->cursor_y = parse_number(&seq[semicolon+1], 1) - 1;
+          view->cursor_x = parse_number(&seq[2], 1) - 1;
+          view->cursor_y = parse_number(&seq[semicolon+1], 1) - 1;
         }
       break;
       case 'J':  {
         switch (seq[2]) {
           case '1':
-            for (int y = 0; y < terminal->cursor_y; ++y) {
-              int w = y == terminal->cursor_y - 1 ? terminal->cursor_x : terminal->columns;
-              memset(&terminal->buffers[terminal->view][terminal->columns * y], 0, sizeof(buffer_char_t) * w);
+            for (int y = 0; y < view->cursor_y; ++y) {
+              int w = y == view->cursor_y - 1 ? view->cursor_x : terminal->columns;
+              memset(&view->buffer[terminal->columns * y], 0, sizeof(buffer_char_t) * w);
             }
           break;
           case '3':
             terminal_clear_scrollback_buffer(terminal);
             // intentional fallthrough
           case '2':
-            memset(terminal->buffers[terminal->view], 0, sizeof(buffer_char_t) * (terminal->columns * terminal->lines));
-            terminal->cursor_x = 0;
-            terminal->cursor_y = 0;
+            memset(view->buffer, 0, sizeof(buffer_char_t) * (terminal->columns * terminal->lines));
+            view->cursor_x = 0;
+            view->cursor_y = 0;
           break;
           default:
-            for (int y = terminal->cursor_y; y < terminal->lines; ++y) {
-              int x = y == terminal->cursor_y ? terminal->cursor_x : 0;
-              memset(&terminal->buffers[terminal->view][terminal->columns * y + x], 0, sizeof(buffer_char_t) * (terminal->columns - x));
+            for (int y = view->cursor_y; y < terminal->lines; ++y) {
+              int x = y == view->cursor_y ? view->cursor_x : 0;
+              memset(&view->buffer[terminal->columns * y + x], 0, sizeof(buffer_char_t) * (terminal->columns - x));
             }
           break;
         }
       } break;
       case 'K': {
         switch (seq[2]) {
-          case '1': memset(&terminal->buffers[terminal->view]  [terminal->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->cursor_x);     break;
-          case '2': memset(&terminal->buffers[terminal->view][terminal->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);      break;
+          case '1': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * view->cursor_x);     break;
+          case '2': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);      break;
           default:
-            memset(&terminal->buffers[terminal->view][terminal->cursor_y * terminal->columns + terminal->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - terminal->cursor_x));
+            memset(&view->buffer[view->cursor_y * terminal->columns + view->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - view->cursor_x));
           break;
         }
       } break;
@@ -291,52 +297,52 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           switch (state) {
             case DISPLAY_STATE_NONE:
               switch (parse_number(&seq[offset], 0)) {
-                case 0  : terminal->cursor_styling = (buffer_styling_t) { 0, 0, 0 }; break;
-                case 1  : terminal->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
-                case 3  : terminal->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
-                case 4  : terminal->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
-                case 30 : terminal->cursor_styling.foreground = 0; break;
-                case 31 : terminal->cursor_styling.foreground = 1; break;
-                case 32 : terminal->cursor_styling.foreground = 2; break;
-                case 33 : terminal->cursor_styling.foreground = 3; break;
-                case 34 : terminal->cursor_styling.foreground = 4; break;
-                case 35 : terminal->cursor_styling.foreground = 5; break;
-                case 36 : terminal->cursor_styling.foreground = 6; break;
-                case 37 : terminal->cursor_styling.foreground = 7; break;
-                case 38 : terminal->cursor_styling.foreground = 0; break;
+                case 0  : view->cursor_styling = (buffer_styling_t) { 0, 0, 0 }; break;
+                case 1  : view->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
+                case 3  : view->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
+                case 4  : view->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
+                case 30 : view->cursor_styling.foreground = 0; break;
+                case 31 : view->cursor_styling.foreground = 1; break;
+                case 32 : view->cursor_styling.foreground = 2; break;
+                case 33 : view->cursor_styling.foreground = 3; break;
+                case 34 : view->cursor_styling.foreground = 4; break;
+                case 35 : view->cursor_styling.foreground = 5; break;
+                case 36 : view->cursor_styling.foreground = 6; break;
+                case 37 : view->cursor_styling.foreground = 7; break;
+                case 38 : view->cursor_styling.foreground = 0; break;
                 case 39 : state = DISPLAY_STATE_FOREGROUND_COLOR_MODE; break;
-                case 40 : terminal->cursor_styling.background = 0; break;
-                case 41 : terminal->cursor_styling.background = 1; break;
-                case 42 : terminal->cursor_styling.background = 2; break;
-                case 43 : terminal->cursor_styling.background = 3; break;
-                case 44 : terminal->cursor_styling.background = 4; break;
-                case 45 : terminal->cursor_styling.background = 5; break;
-                case 46 : terminal->cursor_styling.background = 6; break;
-                case 47 : terminal->cursor_styling.background = 7; break;
-                case 48 : terminal->cursor_styling.background = 0; break;
+                case 40 : view->cursor_styling.background = 0; break;
+                case 41 : view->cursor_styling.background = 1; break;
+                case 42 : view->cursor_styling.background = 2; break;
+                case 43 : view->cursor_styling.background = 3; break;
+                case 44 : view->cursor_styling.background = 4; break;
+                case 45 : view->cursor_styling.background = 5; break;
+                case 46 : view->cursor_styling.background = 6; break;
+                case 47 : view->cursor_styling.background = 7; break;
+                case 48 : view->cursor_styling.background = 0; break;
                 case 49 : state = DISPLAY_STATE_BACKGROUND_COLOR_VALUE; break;
-                case 90 : terminal->cursor_styling.foreground = 251; break;
-                case 91 : terminal->cursor_styling.foreground = 160; break;
-                case 92 : terminal->cursor_styling.foreground = 119; break;
-                case 93 : terminal->cursor_styling.foreground = 226; break;
-                case 94 : terminal->cursor_styling.foreground = 81; break;
-                case 95 : terminal->cursor_styling.foreground = 201; break;
-                case 96 : terminal->cursor_styling.foreground = 51; break;
-                case 97 : terminal->cursor_styling.foreground = 231; break;
-                case 100: terminal->cursor_styling.background = 251; break;
-                case 101: terminal->cursor_styling.background = 160; break;
-                case 102: terminal->cursor_styling.background = 119; break;
-                case 103: terminal->cursor_styling.background = 226; break;
-                case 104: terminal->cursor_styling.background = 81; break;
-                case 105: terminal->cursor_styling.background = 201; break;
-                case 106: terminal->cursor_styling.background = 51; break;
-                case 107: terminal->cursor_styling.background = 231; break;
+                case 90 : view->cursor_styling.foreground = 251; break;
+                case 91 : view->cursor_styling.foreground = 160; break;
+                case 92 : view->cursor_styling.foreground = 119; break;
+                case 93 : view->cursor_styling.foreground = 226; break;
+                case 94 : view->cursor_styling.foreground = 81; break;
+                case 95 : view->cursor_styling.foreground = 201; break;
+                case 96 : view->cursor_styling.foreground = 51; break;
+                case 97 : view->cursor_styling.foreground = 231; break;
+                case 100: view->cursor_styling.background = 251; break;
+                case 101: view->cursor_styling.background = 160; break;
+                case 102: view->cursor_styling.background = 119; break;
+                case 103: view->cursor_styling.background = 226; break;
+                case 104: view->cursor_styling.background = 81; break;
+                case 105: view->cursor_styling.background = 201; break;
+                case 106: view->cursor_styling.background = 51; break;
+                case 107: view->cursor_styling.background = 231; break;
               }
             break;
             case DISPLAY_STATE_FOREGROUND_COLOR_MODE: state = DISPLAY_STATE_FOREGROUND_COLOR_VALUE; break;
             case DISPLAY_STATE_BACKGROUND_COLOR_MODE: state = DISPLAY_STATE_BACKGROUND_COLOR_VALUE; break;
-            case DISPLAY_STATE_FOREGROUND_COLOR_VALUE: terminal->cursor_styling.foreground = parse_number(&seq[offset], 0); break;
-            case DISPLAY_STATE_BACKGROUND_COLOR_VALUE: terminal->cursor_styling.background = parse_number(&seq[offset], 0); break;
+            case DISPLAY_STATE_FOREGROUND_COLOR_VALUE: view->cursor_styling.foreground = parse_number(&seq[offset], 0); break;
+            case DISPLAY_STATE_BACKGROUND_COLOR_VALUE: view->cursor_styling.background = parse_number(&seq[offset], 0); break;
           }
           char* next = strchr(&seq[offset], ';');
           if (!next)
@@ -367,7 +373,7 @@ static terminal_escape_type_e get_terminal_escape_type(char a) {
     case '[': return ESCAPE_TYPE_CSI;
     case ']': return ESCAPE_TYPE_OS;
   }
-  return ESCAPE_TYPE_NONE;
+  return ESCAPE_TYPE_UNKNOWN;
 }
 
 static void terminal_output(terminal_t* terminal, const char* str, int len) {
@@ -375,6 +381,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   int offset = 0;
   int buffered_sequence_index = strlen(terminal->buffered_sequence);
   terminal_escape_type_e escape_type = ESCAPE_TYPE_NONE;
+  view_t* view = &terminal->views[terminal->current_view];
   if (buffered_sequence_index) {
     if (buffered_sequence_index == 1)
       escape_type = ESCAPE_TYPE_OPEN;
@@ -388,13 +395,20 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         escape_type = get_terminal_escape_type(str[offset]);
       else if (
         (escape_type == ESCAPE_TYPE_CSI && str[offset] >= 0x40 && str[offset] <= 0x7E) ||
-        (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a'))
+        (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a')) ||
+        (escape_type == ESCAPE_TYPE_UNKNOWN && str[offset] == 0x1B)
       ) {
         terminal->buffered_sequence[buffered_sequence_index++] = 0;
         terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence);
+        view = &terminal->views[terminal->current_view];
         buffered_sequence_index = 0;
         terminal->buffered_sequence[0] = 0;
-        escape_type = ESCAPE_TYPE_NONE;
+        if (str[offset] == 0x1B && escape_type == ESCAPE_TYPE_UNKNOWN) {
+          escape_type = ESCAPE_TYPE_OPEN;
+          terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
+        } else {
+          escape_type = ESCAPE_TYPE_NONE;
+        }
       }
       ++offset;
     } else {
@@ -410,15 +424,15 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x07:
         break;
         case '\b': {
-          if (terminal->cursor_x)
-            --terminal->cursor_x;
+          if (view->cursor_x)
+            --view->cursor_x;
         } break;
         case 0x09:
         break;
         case '\n': {
-          terminal->cursor_x = 0;
-          if (terminal->cursor_y < terminal->lines - 1)
-            ++terminal->cursor_y;
+          view->cursor_x = 0;
+          if (view->cursor_y < terminal->lines - 1)
+            ++view->cursor_y;
           else
             terminal_shift_buffer(terminal);
         } break;
@@ -426,7 +440,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x0C:
         break;
         case '\r': {
-          terminal->cursor_x = 0;
+          view->cursor_x = 0;
         } break;
         case 0x0E:
         case 0x0F:
@@ -452,12 +466,12 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x1F:
           break;
         default:
-          terminal->buffers[terminal->view][terminal->cursor_y * terminal->columns + terminal->cursor_x] = (buffer_char_t){ terminal->cursor_styling, codepoint };
-          if (terminal->cursor_x++ > terminal->columns) {
-            terminal->cursor_x = 0;
-            if (terminal->cursor_y < terminal->lines - 1)
-              ++terminal->cursor_y;
-            else if (terminal->view == VIEW_ALTERNATE_BUFFER)
+          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
+          if (view->cursor_x++ > terminal->columns) {
+            view->cursor_x = 0;
+            if (view->cursor_y < terminal->lines - 1)
+              ++view->cursor_y;
+            else if (terminal->current_view == VIEW_NORMAL_BUFFER)
               terminal_shift_buffer(terminal);
           }
         break;
@@ -483,8 +497,8 @@ static int terminal_update(terminal_t* terminal) {
 static void terminal_free(terminal_t* terminal) {
   terminal_clear_scrollback_buffer(terminal);
   for (int i = 0; i < VIEW_MAX; ++i) {
-    if (terminal->buffers[i])
-      free(terminal->buffers[i]);
+    if (terminal->views[i].buffer)
+      free(terminal->views[i].buffer);
   }
   if (terminal->pid) {
     close(terminal->master);
@@ -500,8 +514,8 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   terminal->columns = columns;
   terminal->lines = lines;
   for (int i = 0; i < VIEW_MAX; ++i) {
-    terminal->buffers[i] = realloc(terminal->buffers[i], sizeof(buffer_char_t) * terminal->columns * terminal->lines);
-    memset(terminal->buffers[i], 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
+    terminal->views[i].buffer = realloc(terminal->views[i].buffer, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
+    memset(terminal->views[i].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
   }
 }
 
@@ -562,7 +576,8 @@ static int f_terminal_lines(lua_State* L) {
 
   int total_lines = 0;
   int remaining_lines = terminal->lines;
-  if (terminal->view == VIEW_NORMAL_BUFFER && terminal->scrollback_target) {
+  view_t* view = &terminal->views[terminal->current_view];
+  if (terminal->current_view == VIEW_NORMAL_BUFFER && terminal->scrollback_target) {
     backbuffer_page_t* current_backbuffer = terminal->scrollback_target;
     int lines_into_buffer = terminal->scrollback_target_top_offset - terminal->scrollback_position;
     while (current_backbuffer) {
@@ -578,7 +593,7 @@ static int f_terminal_lines(lua_State* L) {
   }
   if (remaining_lines > 0) {
     for (int y = 0; y < remaining_lines; ++y) {
-      output_line(L, &terminal->buffers[terminal->view][y * terminal->columns], &terminal->buffers[terminal->view][(y+1) * terminal->columns]);
+      output_line(L, &view->buffer[y * terminal->columns], &view->buffer[(y+1) * terminal->columns]);
       lua_rawseti(L, -2, ++total_lines);
     }
   }
@@ -649,8 +664,8 @@ static int f_terminal_exited(lua_State* L) {
 
 static int f_terminal_cursor(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  lua_pushinteger(L, terminal->cursor_x);
-  lua_pushinteger(L, terminal->cursor_y);
+  lua_pushinteger(L, terminal->views[terminal->current_view].cursor_x);
+  lua_pushinteger(L, terminal->views[terminal->current_view].cursor_y);
   return 2;
 }
 
