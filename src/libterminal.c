@@ -212,7 +212,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
     memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_end - 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start - 1));
     memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
-  } else {
+  } else if (terminal->current_view == VIEW_NORMAL_BUFFER) {
     if (terminal->scrollback_total_lines++ > terminal->scrollback_limit) {
       backbuffer_page_t* page = terminal->scrollback_buffer_end;
       if (page->next)
@@ -243,6 +243,11 @@ static void terminal_switch_buffer(terminal_t* terminal, EView view) {
   terminal->current_view = view;
   if (view == VIEW_ALTERNATE_BUFFER) {
     memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
+    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_x = 0;
+    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_y = 0;
+    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling.value = 0;
+    terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_end = -1;
+    terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_start = -1;
   }
 }
 
