@@ -13,6 +13,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 config.plugins.terminal = common.merge({
   shell = "bash",
   scrollback_limit = 10000,
+  height = 300,
   font = style.code_font,
   background = { common.color "#000000" },
   text = { common.color "#FFFFFF" },
@@ -82,7 +83,7 @@ function TerminalView:supports_text_input() return true end
 
 function TerminalView:new()
   TerminalView.super.new(self)
-  self.size.y = 400
+  self.size.y = config.plugins.terminal.height
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
 end
@@ -102,21 +103,25 @@ function TerminalView:update()
     end
   end
   if self.terminal then
-    if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
-      self.focused = core.active_view == self
-      self.terminal:focused(self.focused)
-    end
-    local x, y, mode = self.terminal:cursor()
-    if mode == "blinking" then
-      local T = config.blink_period
-      local ta, tb = core.blink_timer, system.get_time()
-      if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
+    if not self.terminal:exited() then
+      if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
+        self.focused = core.active_view == self
+        self.terminal:focused(self.focused)
+      end
+      local x, y, mode = self.terminal:cursor()
+      if mode == "blinking" then
+        local T = config.blink_period
+        local ta, tb = core.blink_timer, system.get_time()
+        if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
+          core.redraw = true
+        end
+        core.blink_timer = tb
+      end
+      if self.terminal:update() then
         core.redraw = true
       end
-      core.blink_timer = tb
-    end
-    if self.terminal:update() then
-      core.redraw = true
+    else
+      self.terminal = nil
     end
   end
   TerminalView.super.update(self)
@@ -131,6 +136,8 @@ function TerminalView:draw()
 
     local y = self.position.y + style.padding.y
     local lh = style.code_font:get_height()
+    local should_redraw = self.terminal:update()
+    if should_redraw then core.redraw = true end
     for i, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + style.padding.x
       if mode ~= "hidden" and core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then

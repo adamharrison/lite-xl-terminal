@@ -241,6 +241,9 @@ static void terminal_shift_buffer(terminal_t* terminal) {
 
 static void terminal_switch_buffer(terminal_t* terminal, EView view) {
   terminal->current_view = view;
+  if (view == VIEW_ALTERNATE_BUFFER) {
+    memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
+  }
 }
 
 static int parse_number(const char* seq, int def) {
@@ -254,6 +257,7 @@ typedef enum terminal_escape_type_e {
   ESCAPE_TYPE_OPEN,
   ESCAPE_TYPE_CSI,
   ESCAPE_TYPE_OS,
+  ESCAPE_TYPE_FIXED_WIDTH,
   ESCAPE_TYPE_UNKNOWN
 } terminal_escape_type_e;
 
@@ -343,6 +347,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case 12: view->mode = CURSOR_BLINKING; break;
             case 25: view->mode = CURSOR_SOLID; break;
             case 1004: terminal->reporting_focus = 1; break;
+            case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
             default:
@@ -359,6 +364,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case 12: view->mode = CURSOR_SOLID; break;
             case 25: view->mode = CURSOR_HIDDEN; break;
             case 1004: terminal->reporting_focus = 0; break;
+            case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_NORMAL; break;
             default:
@@ -437,6 +443,17 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         }
         return 0;
       } break;
+      case 'n': {
+        if (parse_number(&seq[2], 0) == 6) {
+          char buffer[8];
+          int length = snprintf(buffer, sizeof(buffer), "\x1B[%d;%d", view->cursor_y, view->cursor_x);
+          terminal_input(terminal, buffer, length);
+        } else {
+          #ifdef LIBTERMINAL_DEBUG_ESCAPE
+            fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
+          #endif
+        }
+      } break;
       case 'r': {
         int semicolon = -1;
         for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
@@ -459,35 +476,62 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
 }
 
 
-static terminal_escape_type_e get_terminal_escape_type(char a) {
+static terminal_escape_type_e get_terminal_escape_type(char a, int* fixed_width) {
   switch (a) {
     case '[': return ESCAPE_TYPE_CSI;
     case ']': return ESCAPE_TYPE_OS;
+    case 'F':
+    case '>':
+    case '=':
+    case '7':
+    case '8':
+    case 'c':
+    case 'l':
+    case 'm':
+    case 'n':
+    case 'o':
+    case '|':
+    case '}':
+    case '~':
+      *fixed_width = 2;
+      return ESCAPE_TYPE_FIXED_WIDTH;
+    case ' ':
+    case '#':
+    case '%':
+    case '(':
+    case ')':
+    case '*':
+    case '+':
+      *fixed_width = 3;
+      return ESCAPE_TYPE_FIXED_WIDTH;
   }
   return ESCAPE_TYPE_UNKNOWN;
+}
+
+static terminal_escape_type_e parse_partial_sequence(const char* seq, int len, int* fixed_width) {
+  if (len == 0)
+    return ESCAPE_TYPE_NONE;
+  if (len == 1)
+    return ESCAPE_TYPE_OPEN;
+  return get_terminal_escape_type(seq[1], fixed_width);
 }
 
 static void terminal_output(terminal_t* terminal, const char* str, int len) {
   unsigned int codepoint;
   int offset = 0;
   int buffered_sequence_index = strlen(terminal->buffered_sequence);
-  terminal_escape_type_e escape_type = ESCAPE_TYPE_NONE;
   view_t* view = &terminal->views[terminal->current_view];
-  if (buffered_sequence_index) {
-    if (buffered_sequence_index == 1)
-      escape_type = ESCAPE_TYPE_OPEN;
-    else
-      escape_type = get_terminal_escape_type(terminal->buffered_sequence[1]);
-  }
+  int fixed_width = -1;
+  terminal_escape_type_e escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
   while (offset < len) {
-    if (buffered_sequence_index) {
+    if (escape_type != ESCAPE_TYPE_NONE) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
-      if (escape_type == ESCAPE_TYPE_OPEN)
-        escape_type = get_terminal_escape_type(str[offset]);
-      else if (
-        (escape_type == ESCAPE_TYPE_CSI && str[offset] >= 0x40 && str[offset] <= 0x7E) ||
+      escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
+      if (
+        (escape_type == ESCAPE_TYPE_CSI && buffered_sequence_index > 2 && str[offset] >= 0x40 && str[offset] <= 0x7E) ||
         (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a')) ||
-        (escape_type == ESCAPE_TYPE_UNKNOWN && str[offset] == 0x1B)
+        (escape_type == ESCAPE_TYPE_UNKNOWN && str[offset] == 0x1B) ||
+        (escape_type == ESCAPE_TYPE_FIXED_WIDTH && buffered_sequence_index == fixed_width)
       ) {
         terminal->buffered_sequence[buffered_sequence_index++] = 0;
         terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence);
@@ -557,7 +601,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x1F:
           break;
         default:
-          // fprintf(stderr, "wat: %c\n", codepoint);
           view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
           view->cursor_x++;
           if (view->cursor_x >= terminal->columns) {
@@ -578,6 +621,12 @@ static int terminal_update(terminal_t* terminal) {
   int len, at_least_one = 0;
   do {
     len = read(terminal->master, chunk, sizeof(chunk));
+    if (len > 0) {
+      fprintf(stderr, "LEN: %d\n", len);
+      FILE* file = fopen("/tmp/testw", "ab");
+      fwrite(chunk, sizeof(char), len, file);
+      fclose(file);
+    }
     if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
       return at_least_one;
     }
@@ -667,8 +716,6 @@ static int output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
 
 static int f_terminal_lines(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  if (terminal_update(terminal) == -1)
-    return 0;
   lua_newtable(L);
 
   int total_lines = 0;
@@ -756,7 +803,7 @@ static int f_terminal_resize(lua_State* L) {
 static int f_terminal_exited(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   int status;
-  lua_pushboolean(L, waitpid(terminal->pid, &status, WNOHANG) <= 0);
+  lua_pushboolean(L, waitpid(terminal->pid, &status, WNOHANG) > 0);
   return 1;
 }
 
