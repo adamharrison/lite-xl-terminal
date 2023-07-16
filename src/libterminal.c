@@ -123,6 +123,7 @@ typedef struct {
   int master;                                        // FD for pty.
   pid_t pid;                                         // pid for shell.
   paste_mode_e paste_mode;
+  int reporting_focus;                               // Enables/disbles reporting focus.
   char buffered_sequence[LIBTERMINAL_CHUNK_SIZE];
 } terminal_t;
 
@@ -283,9 +284,9 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_x = 0;
           view->cursor_y = 0;
         } else {
-          view->cursor_x = parse_number(&seq[2], 1) - 1;
-          view->cursor_y = parse_number(&seq[semicolon+1], 1) - 1;
-          fprintf(stderr, "SET CURSOR TO %d %d\n", view->cursor_x, view->cursor_y);
+          view->cursor_y = parse_number(&seq[2], 1) - 1;
+          view->cursor_x = parse_number(&seq[semicolon+1], 1) - 1;
+          //fprintf(stderr, "SET CURSOR TO %d %d (%d %d)\n", view->cursor_x, view->cursor_y, terminal->columns, terminal->lines);
         }
       break;
       case 'J':  {
@@ -341,6 +342,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           switch (parse_number(&seq[3], 0)) {
             case 12: view->mode = CURSOR_BLINKING; break;
             case 25: view->mode = CURSOR_SOLID; break;
+            case 1004: terminal->reporting_focus = 1; break;
             case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
             default:
@@ -356,6 +358,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           switch (parse_number(&seq[3], 0)) {
             case 12: view->mode = CURSOR_SOLID; break;
             case 25: view->mode = CURSOR_HIDDEN; break;
+            case 1004: terminal->reporting_focus = 0; break;
             case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_NORMAL; break;
             default:
@@ -554,7 +557,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x1F:
           break;
         default:
-          fprintf(stderr, "wat: %c\n", codepoint);
+          // fprintf(stderr, "wat: %c\n", codepoint);
           view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
           view->cursor_x++;
           if (view->cursor_x >= terminal->columns) {
@@ -646,17 +649,17 @@ static int output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
   char text_buffer[LIBTERMINAL_MAX_LINE_WIDTH] = {0};
   buffer_styling_t style = start->styling;
   while (1) {
-    if (start->styling.value != style.value || start >= end || !start->codepoint) {
+    if (start->styling.value != style.value || start >= end) {
       lua_pushinteger(L, style.foreground << 16 | style.background << 8 | style.attributes);
       lua_rawseti(L, -2, ++group);
       lua_pushlstring(L, text_buffer, block_size);
       lua_rawseti(L, -2, ++group);
       block_size = 0;
       style = start->styling;
-      if (start >= end || !start->codepoint)
+      if (start >= end)
         break;
     }
-    text_buffer[block_size++] = (char)start->codepoint;
+    text_buffer[block_size++] = start->codepoint != 0 ? (char)start->codepoint : ' ';
     ++start;
   }
 }
@@ -777,6 +780,12 @@ static int f_terminal_scrollback(lua_State* L) {
   return 1;
 }
 
+static int f_terminal_focused(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  if (terminal->reporting_focus)
+    terminal_input(terminal, lua_toboolean(L, 2) ? "\x1B[" : "\x1B[O", 3);
+}
+
 
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc         },
@@ -787,6 +796,7 @@ static const luaL_Reg terminal_api[] = {
   { "update",        f_terminal_update     },
   { "exited",        f_terminal_exited     },
   { "cursor",        f_terminal_cursor     },
+  { "focused",       f_terminal_focused    },
   { "scrollback",    f_terminal_scrollback },
   { NULL,            NULL                  }
 };

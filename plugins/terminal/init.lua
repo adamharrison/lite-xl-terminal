@@ -82,15 +82,16 @@ function TerminalView:supports_text_input() return true end
 
 function TerminalView:new()
   TerminalView.super.new(self)
-  self.size.y = 200
+  self.size.y = 400
   self.last_size = { x = self.size.x, y = self.size.y }
+  self.focused = false
 end
 
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
-    self.columns = math.floor(self.size.x / style.code_font:get_width("W"))
-    self.lines = math.floor(self.size.y / style.code_font:get_height())
+    self.columns = math.floor((self.size.x - style.padding.x*2) / style.code_font:get_width("W"))
+    self.lines = math.floor((self.size.y - style.padding.y*2) / style.code_font:get_height())
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, {})
@@ -101,6 +102,10 @@ function TerminalView:update()
     end
   end
   if self.terminal then
+    if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
+      self.focused = core.active_view == self
+      self.terminal:focused(self.focused)
+    end
     local x, y, mode = self.terminal:cursor()
     if mode == "blinking" then
       local T = config.blink_period
@@ -199,6 +204,7 @@ command.add(TerminalView, {
   ["terminal:f10"]  = function() view.terminal:input("\x1B[21~") end,
   ["terminal:f11"]  = function() view.terminal:input("\x1B[23~") end,
   ["terminal:f12"]  = function() view.terminal:input("\x1B[24~") end,
+  ["terminal:escape"]  = function() view.terminal:input("\x1B") end,
   ["terminal:copy"] = function() end
 });
 
@@ -233,7 +239,8 @@ keymap.add {
   ["f9"] = "terminal:f9",
   ["f10"] = "terminal:f10",
   ["f11"] = "terminal:f11",
-  ["f12"] = "terminal:f11"
+  ["f12"] = "terminal:f11",
+  ["escape"] = "terminal:escape"
 }
 
 return {
