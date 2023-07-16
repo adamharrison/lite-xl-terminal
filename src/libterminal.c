@@ -83,25 +83,46 @@ typedef enum {
   VIEW_MAX = 2
 } EView;
 
+
+typedef enum cursor_mode_e {
+  CURSOR_SOLID         = 0,
+  CURSOR_HIDDEN        = 1,
+  CURSOR_BLINKING      = 2,
+} cursor_mode_e;
+
+typedef enum paste_mode_e {
+  PASTE_NORMAL,
+  PASTE_BRACKETED
+} paste_mode_e;
+
 typedef struct view_t {
   buffer_char_t* buffer;
   int cursor_x, cursor_y;
   buffer_styling_t cursor_styling; // What characters are currently being emitted as.
+  cursor_mode_e mode;
+  // The index of where the scrolling region starts/ends.
+  // If enabled, disables shuffling of text to the scrollback
+  // buffer. When applied, shifts cursor to the top, and allows you to write
+  // text wherever. However, if you hit newline, at the bottom of the scroll region
+  // shifts only that region up.
+  int scrolling_region_start, scrolling_region_end;
 } view_t;
 
 
 typedef struct {
-  backbuffer_page_t* scrollback_buffer;    // Beginning of linked list.
-  backbuffer_page_t* scrollback_target;    // Target based on scrollback_position.
-  int scrollback_target_top_offset;        // The offset that the top of the scrollback_target page is from the start of the buffer..
-  int total_scrollback_lines;              // Cached total amount of lines we can scroll bcak.
-  int scrollback_position;                 // Canonical amount of lines we've scrolled back.
-  int scrollback_limit;                    // The amount of lines we'll hold in memory maximum.
+  backbuffer_page_t* scrollback_buffer_end;          // End of the linked list.
+  backbuffer_page_t* scrollback_buffer_start;        // Beginning of linked list.
+  backbuffer_page_t* scrollback_target;              // Target based on scrollback_position.
+  int scrollback_target_top_offset;                  // The offset that the top of the scrollback_target page is from the start of the buffer..
+  int scrollback_total_lines;                        // Cached total amount of lines we can scroll bcak.
+  int scrollback_position;                           // Canonical amount of lines we've scrolled back.
+  int scrollback_limit;                              // The amount of lines we'll hold in memory maximum.
   int columns, lines;
   EView current_view;
-  view_t views[VIEW_MAX];                  // Normally just two buffers, normal, and alternate.
-  int master;                              // FD for pty.
-  pid_t pid;                               // pid for shell.
+  view_t views[VIEW_MAX];                            // Normally just two buffers, normal, and alternate.
+  int master;                                        // FD for pty.
+  pid_t pid;                                         // pid for shell.
+  paste_mode_e paste_mode;
   char buffered_sequence[LIBTERMINAL_CHUNK_SIZE];
 } terminal_t;
 
@@ -124,7 +145,7 @@ static int utf8_to_codepoint(const char *p, unsigned *dst) {
 }
 
 static int terminal_scrollback(terminal_t* terminal, int target) {
-  if (!terminal->scrollback_buffer || target <= 0) {
+  if (!terminal->scrollback_buffer_start || target <= 0) {
     terminal->scrollback_target = NULL;
     terminal->scrollback_position = 0;
     terminal->scrollback_target_top_offset = 0;
@@ -138,7 +159,7 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
   }
   while (target > current_top_offset) {
     if (!current) {
-      current = terminal->scrollback_buffer;
+      current = terminal->scrollback_buffer_start;
       current_top_offset = current->line;
     } else {
       if (!current->prev) {
@@ -172,34 +193,49 @@ static void terminal_input(terminal_t* terminal, const char* str, int len) {
 }
 
 static void terminal_clear_scrollback_buffer(terminal_t* terminal) {
-  backbuffer_page_t* scrollback_buffer = terminal->scrollback_buffer;
+  backbuffer_page_t* scrollback_buffer = terminal->scrollback_buffer_start;
   while (scrollback_buffer) {
       backbuffer_page_t* prev = scrollback_buffer->prev;
       free(scrollback_buffer);
       scrollback_buffer = prev;
   }
-  terminal->scrollback_buffer = NULL;
+  terminal->scrollback_buffer_start = NULL;
+  terminal->scrollback_buffer_end = NULL;
   terminal->scrollback_target = NULL;
   terminal->scrollback_target_top_offset = 0;
 }
 
 static void terminal_shift_buffer(terminal_t* terminal) {
-  assert(terminal->current_view == VIEW_NORMAL_BUFFER);
-  if (!terminal->scrollback_buffer || terminal->scrollback_buffer->columns != terminal->columns || terminal->scrollback_buffer->lines != terminal->lines || terminal->scrollback_buffer->line >= terminal->scrollback_buffer->lines) {
-    backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
-    backbuffer_page_t* prev = terminal->scrollback_buffer;
-    page->prev = prev;
-    if (prev)
-      prev->next = page;
-    terminal->scrollback_buffer = page;
-    page->lines = terminal->lines;
-    page->columns = terminal->columns;
-    page->line = 0;
+  view_t* view = &terminal->views[terminal->current_view];
+
+  if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
+    memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_end - 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start - 1));
+    memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+  } else {
+    if (terminal->scrollback_total_lines++ > terminal->scrollback_limit) {
+      backbuffer_page_t* page = terminal->scrollback_buffer_end;
+      if (page->next)
+        page->next->prev = NULL;
+      terminal->scrollback_buffer_end = page->next;
+      terminal->scrollback_total_lines -= page->line;
+      free(page);
+    }
+    if (!terminal->scrollback_buffer_start || terminal->scrollback_buffer_start->columns != terminal->columns || terminal->scrollback_buffer_start->lines != terminal->lines || terminal->scrollback_buffer_start->line >= terminal->scrollback_buffer_start->lines) {
+      backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
+      backbuffer_page_t* prev = terminal->scrollback_buffer_start;
+      page->prev = prev;
+      if (prev)
+        prev->next = page;
+      terminal->scrollback_buffer_start = page;
+      page->lines = terminal->lines;
+      page->columns = terminal->columns;
+      page->line = 0;
+    }
+    memcpy(&terminal->scrollback_buffer_start->buffer[terminal->scrollback_buffer_start->line * terminal->columns], &view->buffer[0], sizeof(buffer_char_t) * terminal->columns);
+    memmove(&view->buffer[0], &view->buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
+    memset(&view->buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+    terminal->scrollback_buffer_start->line++;
   }
-  memcpy(&terminal->scrollback_buffer->buffer[terminal->scrollback_buffer->line * terminal->columns], &terminal->views[VIEW_NORMAL_BUFFER].buffer[0], sizeof(buffer_char_t) * terminal->columns);
-  memmove(&terminal->views[VIEW_NORMAL_BUFFER].buffer[0], &terminal->views[VIEW_NORMAL_BUFFER].buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
-  memset(&terminal->views[VIEW_NORMAL_BUFFER].buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
-  terminal->scrollback_buffer->line++;
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, EView view) {
@@ -219,6 +255,7 @@ typedef enum terminal_escape_type_e {
   ESCAPE_TYPE_OS,
   ESCAPE_TYPE_UNKNOWN
 } terminal_escape_type_e;
+
 
 static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e type, const char* seq) {
   #ifdef LIBTERMINAL_DEBUG_ESCAPE
@@ -248,6 +285,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         } else {
           view->cursor_x = parse_number(&seq[2], 1) - 1;
           view->cursor_y = parse_number(&seq[semicolon+1], 1) - 1;
+          fprintf(stderr, "SET CURSOR TO %d %d\n", view->cursor_x, view->cursor_y);
         }
       break;
       case 'J':  {
@@ -277,10 +315,55 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'K': {
         switch (seq[2]) {
           case '1': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * view->cursor_x);     break;
-          case '2': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);      break;
+          case '2': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);  break;
           default:
             memset(&view->buffer[view->cursor_y * terminal->columns + view->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - view->cursor_x));
           break;
+        }
+      } break;
+      case 'P': {
+        int length = parse_number(&seq[2], 1);
+        for (int i = view->cursor_x; i < terminal->columns; ++i) {
+          if (i + length < terminal->columns)
+            view->buffer[view->cursor_y * terminal->columns + i] = view->buffer[view->cursor_y * terminal->columns + i + length];
+          else
+            view->buffer[view->cursor_y * terminal->columns + i].codepoint = ' ';
+        }
+      } break;
+      case 'X': {
+        int length = parse_number(&seq[2], 1);
+        for (int i = view->cursor_x; i < view->cursor_x + length && i < terminal->columns; ++i)
+          view->buffer[view->cursor_y * terminal->columns + i].codepoint = ' ';
+      } break;
+      case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1), 0), terminal->lines - 1); break;
+      case 'h': {
+        if (seq[2] == '?') {
+          switch (parse_number(&seq[3], 0)) {
+            case 12: view->mode = CURSOR_BLINKING; break;
+            case 25: view->mode = CURSOR_SOLID; break;
+            case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
+            case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
+            default:
+              #ifdef LIBTERMINAL_DEBUG_ESCAPE
+                fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
+              #endif
+            break;
+          }\
+        }
+      } break;
+      case 'l': {
+        if (seq[2] == '?') {
+          switch (parse_number(&seq[3], 0)) {
+            case 12: view->mode = CURSOR_SOLID; break;
+            case 25: view->mode = CURSOR_HIDDEN; break;
+            case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
+            case 2004: terminal->paste_mode = PASTE_NORMAL; break;
+            default:
+              #ifdef LIBTERMINAL_DEBUG_ESCAPE
+                fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
+              #endif
+            break;
+          }
         }
       } break;
       case 'm': {
@@ -351,15 +434,20 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         }
         return 0;
       } break;
-      case 'h': {
-        if (seq[2] == '?' && parse_number(&seq[3], 0) == 1049)
-          terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER);
-      } break;
-      case 'l': {
-        if (seq[2] == '?' && parse_number(&seq[3], 0) == 1049)
-          terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER);
+      case 'r': {
+        int semicolon = -1;
+        for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
+        view->cursor_x = 0;
+        view->cursor_y = 0;
+        if (seq[semicolon] == ';') {
+          view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
+          view->scrolling_region_end = parse_number(&seq[semicolon+1], 1) - 1;
+        }
       } break;
       default:
+        #ifdef LIBTERMINAL_DEBUG_ESCAPE
+          fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
+        #endif
         return -1;
       break;
     }
@@ -431,7 +519,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         break;
         case '\n': {
           view->cursor_x = 0;
-          if (view->cursor_y < terminal->lines - 1)
+          if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
             ++view->cursor_y;
           else
             terminal_shift_buffer(terminal);
@@ -466,12 +554,14 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x1F:
           break;
         default:
+          fprintf(stderr, "wat: %c\n", codepoint);
           view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
-          if (view->cursor_x++ > terminal->columns) {
+          view->cursor_x++;
+          if (view->cursor_x >= terminal->columns) {
             view->cursor_x = 0;
-            if (view->cursor_y < terminal->lines - 1)
+            if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
               ++view->cursor_y;
-            else if (terminal->current_view == VIEW_NORMAL_BUFFER)
+            else
               terminal_shift_buffer(terminal);
           }
         break;
@@ -521,12 +611,16 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
 
 static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* pathname, const char** argv) {
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
+  for (int i = 0; i < VIEW_MAX; ++i) {
+    terminal->views[i].scrolling_region_end = -1;
+    terminal->views[i].scrolling_region_start = -1;
+  }
   struct termios term = {0};
   term.c_cc[VINTR] = 127;
   term.c_cc[VSUSP] = 26;
   term.c_lflag |= ECHO | ISIG;
-  terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
   terminal->scrollback_limit = scrollback_limit;
+  terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
   if (terminal->pid == -1) {
     free(terminal);
     return NULL;
@@ -600,12 +694,6 @@ static int f_terminal_lines(lua_State* L) {
   return 1;
 }
 
-static int f_terminal_input(lua_State* L) {
-  size_t len;
-  const char* str = luaL_checklstring(L, 2, &len);
-  terminal_input(*(terminal_t**)lua_touserdata(L, 1), str, (int)len);
-  return 0;
-}
 
 
 static int f_terminal_new(lua_State* L) {
@@ -648,6 +736,13 @@ static int f_terminal_update(lua_State* L){
   return 1;
 }
 
+static int f_terminal_input(lua_State* L) {
+  size_t len;
+  const char* str = luaL_checklstring(L, 2, &len);
+  terminal_input(*(terminal_t**)lua_touserdata(L, 1), str, (int)len);
+  return f_terminal_update(L);
+}
+
 static int f_terminal_resize(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   int x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
@@ -666,7 +761,12 @@ static int f_terminal_cursor(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_x);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_y);
-  return 2;
+  switch (terminal->views[terminal->current_view].mode) {
+    case CURSOR_SOLID: lua_pushliteral(L, "solid"); break;
+    case CURSOR_HIDDEN: lua_pushliteral(L, "hidden"); break;
+    case CURSOR_BLINKING: lua_pushliteral(L, "blinking"); break;
+  }
+  return 3;
 }
 
 static int f_terminal_scrollback(lua_State* L) {

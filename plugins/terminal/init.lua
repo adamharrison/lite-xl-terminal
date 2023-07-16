@@ -100,8 +100,19 @@ function TerminalView:update()
       end
     end
   end
-  if self.terminal and self.terminal:update() then
-    core.redraw = true
+  if self.terminal then
+    local x, y, mode = self.terminal:cursor()
+    if mode == "blinking" then
+      local T = config.blink_period
+      local ta, tb = core.blink_timer, system.get_time()
+      if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
+        core.redraw = true
+      end
+      core.blink_timer = tb
+    end
+    if self.terminal:update() then
+      core.redraw = true
+    end
   end
   TerminalView.super.update(self)
 end
@@ -110,15 +121,22 @@ end
 function TerminalView:draw()
   TerminalView.super.draw_background(self, config.plugins.terminal.background)
   if self.terminal then
-    local cursor_x, cursor_y = self.terminal:cursor()
+    local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = style.code_font:get_width(" ")
 
     local y = self.position.y + style.padding.y
     local lh = style.code_font:get_height()
     for i, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + style.padding.x
-      if core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then
-        renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
+      if mode ~= "hidden" and core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then
+        if mode == "blinking" then
+          local T = config.blink_period
+          if (core.blink_timer - core.blink_start) % T < T / 2 then
+            renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
+          end
+        else
+          renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
+        end
       end
       for i = 1, #line, 2 do
         local foreground_idx, background_idx, style_idx = (line[i] >> 16) & 0xFF, (line[i] >> 8) & 0xFF, line[i] & 0x0F
@@ -151,16 +169,36 @@ local node = core.root_view:get_active_node()
 view.node = node:split("down", view, { y = true }, true)
 
 command.add(TerminalView, {
-  ["terminal:backspace"] = function() view.terminal:input("\b"); end,
-  ["terminal:return"] = function() view.terminal:input("\n"); end,
-  ["terminal:pageup"] = function() view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
-  ["terminal:pagedown"] = function() view.terminal:scrollback(view.terminal:scrollback() - view.lines) end,
+  ["terminal:backspace"] = function() view.terminal:input("\b") end,
+  ["terminal:return"] = function() view.terminal:input("\n") end,
   ["terminal:scroll"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() view.terminal:input("\x1A") end,
   ["terminal:redraw"] = function() view.terminal:redraw() end,
   ["terminal:tab"] = function() view.terminal:input("\t") end,
   ["terminal:paste"] = function() view.terminal:input(system.get_clipboard()) end,
+  ["terminal:scrollup"] = function() view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
+  ["terminal:scrolldown"] = function() view.terminal:scrollback(view.terminal:scrollback() - view.lines) end,
+  ["terminal:up"] = function() view.terminal:input("\x1B[A") end,
+  ["terminal:down"] = function() view.terminal:input("\x1B[B") end,
+  ["terminal:left"] = function() view.terminal:input("\x1B[D") end,
+  ["terminal:right"] = function() view.terminal:input("\x1B[C") end,
+  ["terminal:jump-right"] = function() view.terminal:input("\x1B[1;5C") end,
+  ["terminal:jump-left"] = function() view.terminal:input("\x1B[1;5D") end,
+  ["terminal:home"] = function() view.terminal:input("\x1B[H") end,
+  ["terminal:end"] = function() view.terminal:input("\x1B[F") end,
+  ["terminal:f1"]  = function() view.terminal:input("\x1BOP") end,
+  ["terminal:f2"]  = function() view.terminal:input("\x1BOQ") end,
+  ["terminal:f3"]  = function() view.terminal:input("\x1BOR") end,
+  ["terminal:f4"]  = function() view.terminal:input("\x1BOS") end,
+  ["terminal:f5"]  = function() view.terminal:input("\x1B[15~") end,
+  ["terminal:f6"]  = function() view.terminal:input("\x1B[17~") end,
+  ["terminal:f7"]  = function() view.terminal:input("\x1B[18~") end,
+  ["terminal:f8"]  = function() view.terminal:input("\x1B[19~") end,
+  ["terminal:f9"]  = function() view.terminal:input("\x1B[20~") end,
+  ["terminal:f10"]  = function() view.terminal:input("\x1B[21~") end,
+  ["terminal:f11"]  = function() view.terminal:input("\x1B[23~") end,
+  ["terminal:f12"]  = function() view.terminal:input("\x1B[24~") end,
   ["terminal:copy"] = function() end
 });
 
@@ -174,8 +212,28 @@ keymap.add {
   ["ctrl+shift+v"] = "terminal:paste",
   ["wheel"] = "terminal:scroll",
   ["tab"] = "terminal:tab",
-  ["shift+pageup"] = "terminal:pageup",
-  ["shift+pagedown"] = "terminal:pagedown"
+  ["shift+pageup"] = "terminal:scrollup",
+  ["shift+pagedown"] = "terminal:scrolldown",
+  ["up"] = "terminal:up",
+  ["down"] = "terminal:down",
+  ["left"] = "terminal:left",
+  ["right"] = "terminal:right",
+  ["ctrl+left"] = "terminal:jump-left",
+  ["ctrl+right"] = "terminal:jump-right",
+  ["home"] = "terminal:home",
+  ["end"] = "terminal:end",
+  ["f1"] = "terminal:f1",
+  ["f2"] = "terminal:f2",
+  ["f3"] = "terminal:f3",
+  ["f4"] = "terminal:f4",
+  ["f5"] = "terminal:f5",
+  ["f6"] = "terminal:f6",
+  ["f7"] = "terminal:f7",
+  ["f8"] = "terminal:f8",
+  ["f9"] = "terminal:f9",
+  ["f10"] = "terminal:f10",
+  ["f11"] = "terminal:f11",
+  ["f12"] = "terminal:f11"
 }
 
 return {
