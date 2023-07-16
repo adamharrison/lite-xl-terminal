@@ -210,6 +210,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   view_t* view = &terminal->views[terminal->current_view];
 
   if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
+    fprintf(stderr, "WAT %d %d\n", view->scrolling_region_start, view->scrolling_region_end);
     memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_end - 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start - 1));
     memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
   } else if (terminal->current_view == VIEW_NORMAL_BUFFER) {

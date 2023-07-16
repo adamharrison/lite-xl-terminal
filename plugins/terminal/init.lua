@@ -182,6 +182,8 @@ view.node = node:split("down", view, { y = true }, true)
 
 command.add(TerminalView, {
   ["terminal:backspace"] = function() view.terminal:input("\b") end,
+  ["terminal:alt-backspace"] = function() view.terminal:input("\x1B\b") end,
+  ["terminal:delete"] = function() view.terminal:input("\x1B[3~") end,
   ["terminal:return"] = function() view.terminal:input("\n") end,
   ["terminal:scroll"] = function(cmd, amount) view.terminal:scrollback(view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() view.terminal:input("\x7F") end,
@@ -218,6 +220,8 @@ command.add(TerminalView, {
 keymap.add {
   ["return"] = "terminal:return",
   ["backspace"] = "terminal:backspace",
+  ["delete"] = "terminal:delete",
+  ["alt+backspace"] = "terminal:alt-backspace",
   ["ctrl+l"] = "terminal:redraw",
   ["ctrl+z"] = "terminal:suspend",
   ["ctrl+c"] = "terminal:break",
