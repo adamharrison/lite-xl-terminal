@@ -758,9 +758,9 @@ static int f_terminal_new(lua_State* L) {
   int scrollback_limit = luaL_checkinteger(L, 3);
   const char* path = luaL_checkstring(L, 4);
   char* arguments[256] = {0};
-  if (lua_type(L, 4) == LUA_TTABLE) {
+  if (lua_type(L, 5) == LUA_TTABLE) {
     for (int i = 0; i < 256; ++i) {
-      lua_rawgeti(L, 4, i+1);
+      lua_rawgeti(L, 5, i+1);
       if (!lua_isnil(L, -1)) {
         const char* str = luaL_checkstring(L, -1);
         arguments[i] = dup_string(str);

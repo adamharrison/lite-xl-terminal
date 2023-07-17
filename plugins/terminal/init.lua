@@ -237,6 +237,8 @@ keymap.add {
   ["right"] = "terminal:right",
   ["ctrl+left"] = "terminal:jump-left",
   ["ctrl+right"] = "terminal:jump-right",
+  ["alt+left"] = "terminal:jump-left",
+  ["alt+right"] = "terminal:jump-right",
   ["home"] = "terminal:home",
   ["end"] = "terminal:end",
   ["f1"] = "terminal:f1",
