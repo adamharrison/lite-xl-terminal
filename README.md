@@ -1,6 +1,6 @@
 # lite-xl-terminal
 
-`lite-xl-terminal` is a fully-featured terminal emulator designed to slot into lite-xl as a plugin for windows, mac and linux.
+`lite-xl-terminal` is a (mostly) fully-featured terminal emulator designed to slot into lite-xl as a plugin for windows, mac and linux.
 
 ## Installation
 
@@ -33,5 +33,11 @@ Ships with bash, for windows; assumes that Mac and Linux already have bash.
 
 ## TODO
 
-* Ensure that `vim` works correctly.
-* Ensure that scrollback buffer works correctly.
+* Ensure that locked scrollback regions work correctly. (Hard)
+* Make it so that resizing the terminal doesn't clear the main buffer, and transfers data to any new buffer appropriately. (Easy)
+* Add in additional key combinations like `alt`+`left`. (Easy)
+* Windows support. (Hard)
+* Testing alternate shells. (?)
+* Expanding escape code handling. (?)
+* Make terminal vertically resizable. (Easy)
+* Transcribe utf-8 characters correctly. (Easy)
