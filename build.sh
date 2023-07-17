@@ -1,11 +1,8 @@
 #!/usr/bin/env bash
 
 : ${CC=gcc}
-: ${AR=ar}
-: ${MAKE=make}
-: ${BIN=terminal_native}
-: ${JOBS=4}
+: ${BIN=libterminal.so}
 
 CFLAGS="$CFLAGS -fPIC -Ilib/lite-xl/resources/include"
 
-$CC $CFLAGS src/*.c $@ -shared -o libterminal.so
+$CC $CFLAGS src/*.c $@ -shared -o $BIN

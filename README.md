@@ -4,7 +4,7 @@
 
 ## Installation
 
-The easiest way to install `lite-xl-terminal` is to use [`lpm`](https://github.com/lite-xl/lite-xl-plugin-manager), and
+The easiest way to install `lite-xl-terminal` **will be** to use [`lpm`](https://github.com/lite-xl/lite-xl-plugin-manager), and
 then run the following command:
 
 ```
@@ -16,6 +16,16 @@ If you want to simply try it out, you can use `lpm`'s `run` command:
 ```
 lpm run terminal
 ```
+
+Because we're not released yet, this won't work yet, so you'll have to build the thing manually,
+and copy it into lite like so:
+
+```
+git clone --depth=1 https://github.com/adamharrison/lite-xl-terminal.git --recurse-submodules --shallow-submodules
+  cd lite-xl-terminal && ./build.sh && cp -R plugins/terminal ~/.config/lite-xl/plugins && cp libterminal.so ~/.config/lite-xl/plugins/terminal
+```
+
+Until we're released.
 
 ## Status
 
