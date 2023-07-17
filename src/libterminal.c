@@ -47,12 +47,12 @@ static char* dup_string(const char* str) {
 }
 
 
-enum EAttributes {
+typedef enum attributes_e {
   ATTRIBUTE_NONE = 0,
   ATTRIBUTE_BOLD = 1,
   ATTRIBUTE_ITALIC = 2,
   ATTRIBUTE_UNDERLINE = 4
-};
+} attributes_e;
 
 typedef struct buffer_styling_t {
   union {
@@ -77,11 +77,11 @@ typedef struct backbuffer_page_t {
   buffer_char_t buffer[];
 } backbuffer_page_t;
 
-typedef enum {
+typedef enum view_e {
   VIEW_NORMAL_BUFFER = 0,
   VIEW_ALTERNATE_BUFFER = 1,
   VIEW_MAX = 2
-} EView;
+} view_e;
 
 
 typedef enum cursor_mode_e {
@@ -118,7 +118,7 @@ typedef struct {
   int scrollback_position;                           // Canonical amount of lines we've scrolled back.
   int scrollback_limit;                              // The amount of lines we'll hold in memory maximum.
   int columns, lines;
-  EView current_view;
+  view_e current_view;
   view_t views[VIEW_MAX];                            // Normally just two buffers, normal, and alternate.
   int master;                                        // FD for pty.
   pid_t pid;                                         // pid for shell.
@@ -240,7 +240,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   }
 }
 
-static void terminal_switch_buffer(terminal_t* terminal, EView view) {
+static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
   terminal->current_view = view;
   if (view == VIEW_ALTERNATE_BUFFER) {
     memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
