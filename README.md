@@ -17,6 +17,12 @@ If you want to simply try it out, you can use `lpm`'s `run` command:
 lpm run terminal
 ```
 
+## Status
+
+Currently pre-release. Still has major issues. Use at your own risk. See TODO, below.
+
+Target release date is August 1st, 2023.
+
 ## Description
 
 A simple, and straightforward terminal that presents itself as `xterm-256color`. Supports:
