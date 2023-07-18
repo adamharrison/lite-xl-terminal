@@ -12,6 +12,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 config.plugins.terminal = common.merge({
   shell = "bash",
+  arguments = { },
   scrollback_limit = 10000,
   height = 300,
   font = style.code_font,
@@ -95,7 +96,7 @@ function TerminalView:update()
     self.lines = math.floor((self.size.y - style.padding.y*2) / style.code_font:get_height())
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.lines, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, {})
+        self.terminal = terminal_native.new(self.columns, self.lines, config.plugins.terminal.scrollback_limit, config.plugins.terminal.shell, config.plugins.terminal.arguments)
       else
         self.terminal:resize(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }

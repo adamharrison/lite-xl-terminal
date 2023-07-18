@@ -11,6 +11,7 @@
   #include <sys/types.h>
   #include <sys/wait.h>
 #endif
+#include <stdio.h>
 #include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
@@ -189,7 +190,10 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
   return terminal->scrollback_position;
 }
 
+static void terminal_output(terminal_t* terminal, const char* str, int len);
+
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
+  //terminal_output(terminal, str, len);
   write(terminal->master, str, len);
 }
 
@@ -361,7 +365,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
               #endif
             break;
-          }\
+          }
         }
       } break;
       case 'l': {
@@ -466,8 +470,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         view->cursor_x = 0;
         view->cursor_y = 0;
         if (seq[semicolon] == ';') {
-          view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
-          view->scrolling_region_end = parse_number(&seq[semicolon+1], 1) - 1;
+          //view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
+          //view->scrolling_region_end = parse_number(&seq[semicolon+1], 1) - 1;
         }
       } break;
       default:
@@ -565,8 +569,10 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x07:
         break;
         case '\b': {
-          if (view->cursor_x)
+          if (view->cursor_x) {
             --view->cursor_x;
+            view->buffer[view->cursor_y * terminal->lines + view->cursor_x].codepoint = ' ';
+          }
         } break;
         case 0x09:
         break;
@@ -627,15 +633,15 @@ static int terminal_update(terminal_t* terminal) {
   int len, at_least_one = 0;
   do {
     len = read(terminal->master, chunk, sizeof(chunk));
-    if (len > 0) {
+    /*if (len > 0) {
       fprintf(stderr, "LEN: %d\n", len);
+      fflush(stderr);
       FILE* file = fopen("/tmp/testw", "ab");
       fwrite(chunk, sizeof(char), len, file);
       fclose(file);
-    }
-    if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    }*/
+    if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
       return at_least_one;
-    }
     terminal_output(terminal, chunk, len);
     at_least_one = 1;
   } while (len > 0);
@@ -674,9 +680,14 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     terminal->views[i].scrolling_region_start = -1;
   }
   struct termios term = {0};
+  // if(tcgetattr(0, &term) < 0) { exit(-1); }
   term.c_cc[VINTR] = 127;
   term.c_cc[VSUSP] = 26;
-  term.c_lflag |= ECHO | ISIG;
+  term.c_cc[VERASE] = '\b';
+  term.c_cc[VEOL] = '\n';
+  term.c_cc[VEOF] = 4;
+  term.c_lflag |= ISIG | ECHO | ICANON;
+  term.c_iflag |= IUTF8;
   terminal->scrollback_limit = scrollback_limit;
   terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
   if (terminal->pid == -1) {
@@ -685,7 +696,6 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   }
   if (!terminal->pid) {
     setenv("TERM", "xterm-256color", 1);
-    setsid();
     execvp(pathname,  (char** const)argv);
     exit(-1);
     return NULL;
@@ -757,16 +767,19 @@ static int f_terminal_new(lua_State* L) {
   int y = luaL_checkinteger(L, 2);
   int scrollback_limit = luaL_checkinteger(L, 3);
   const char* path = luaL_checkstring(L, 4);
-  char* arguments[256] = {0};
+  char* arguments[256];
+  arguments[0] = (char*)path;
+  arguments[1] = NULL;
   if (lua_type(L, 5) == LUA_TTABLE) {
-    for (int i = 0; i < 256; ++i) {
+    for (int i = 0; i < 255; ++i) {
       lua_rawgeti(L, 5, i+1);
       if (!lua_isnil(L, -1)) {
         const char* str = luaL_checkstring(L, -1);
-        arguments[i] = dup_string(str);
+        arguments[i+1] = dup_string(str);
         lua_pop(L, 1);
       } else {
         lua_pop(L, 1);
+        arguments[i+1] = NULL;
         break;
       }
     }
@@ -775,7 +788,7 @@ static int f_terminal_new(lua_State* L) {
   terminal_t** pointer = lua_newuserdata(L, sizeof(terminal_t*));
   *pointer = terminal;
   luaL_setmetatable(L, "libterminal");
-  for (int i = 0; i < 256 && arguments[i]; ++i)
+  for (int i = 1; i < 256 && arguments[i]; ++i)
     free(arguments[i]);
   return 1;
 }
@@ -786,9 +799,7 @@ static int f_terminal_gc(lua_State* L) {
 
 static int f_terminal_update(lua_State* L){
   int status = terminal_update(*(terminal_t**)lua_touserdata(L, 1));
-  if (status == -1)
-    return luaL_error(L, "error updating terminal");
-  lua_pushboolean(L, status > 0);
+  lua_pushboolean(L, status != 0);
   return 1;
 }
 
@@ -809,7 +820,11 @@ static int f_terminal_resize(lua_State* L) {
 static int f_terminal_exited(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   int status;
-  lua_pushboolean(L, waitpid(terminal->pid, &status, WNOHANG) > 0);
+  if (waitpid(terminal->pid, &status, WNOHANG) > 0) {
+    assert(WIFEXITED(status));
+    lua_pushinteger(L, WEXITSTATUS(status));
+  } else
+    lua_pushboolean(L, 0);
   return 1;
 }
 
@@ -839,6 +854,10 @@ static int f_terminal_focused(lua_State* L) {
     terminal_input(terminal, lua_toboolean(L, 2) ? "\x1B[" : "\x1B[O", 3);
 }
 
+static int f_terminal_sleep(lua_State* L) {
+  sleep(luaL_checkinteger(L, 1));
+}
+
 
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc         },
@@ -851,6 +870,7 @@ static const luaL_Reg terminal_api[] = {
   { "cursor",        f_terminal_cursor     },
   { "focused",       f_terminal_focused    },
   { "scrollback",    f_terminal_scrollback },
+  { "sleep",         f_terminal_sleep      },
   { NULL,            NULL                  }
 };
 
