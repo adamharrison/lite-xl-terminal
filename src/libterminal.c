@@ -7,9 +7,13 @@
   #include <unistd.h>
   #include <fcntl.h>
   #include <sys/ioctl.h>
-  #include <pty.h>
   #include <sys/types.h>
   #include <sys/wait.h>
+  #if __APPLE__
+    #include <util.h>
+  #else
+    #include <pty.h>
+  #endif
 #endif
 #include <stdio.h>
 #include <assert.h>
@@ -312,7 +316,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'E': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); view->cursor_x = 0; break;
       case 'F': view->cursor_y = min(view->cursor_y - parse_number(&seq[2], 1), 0); view->cursor_x = 0; break;
       case 'G': view->cursor_x = parse_number(&seq[2], 1); break;
-      case 'H':
+      case 'H': {
         int semicolon = -1;
         for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
         if (seq[semicolon] != ';') {
@@ -323,7 +327,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_x = parse_number(&seq[semicolon+1], 1) - 1;
           //fprintf(stderr, "SET CURSOR TO %d %d (%d %d)\n", view->cursor_x, view->cursor_y, terminal->columns, terminal->lines);
         }
-      break;
+      } break;
       case 'J':  {
         switch (seq[2]) {
           case '1':
@@ -733,7 +737,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
 }
 
 
-static int output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
+static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
   lua_newtable(L);
   int block_size = 0;
   int group = 0;
@@ -824,6 +828,7 @@ static int f_terminal_new(lua_State* L) {
 
 static int f_terminal_gc(lua_State* L) {
   terminal_free(*(terminal_t**)lua_touserdata(L, 1));
+  return 0;
 }
 
 static int f_terminal_update(lua_State* L){
@@ -843,6 +848,7 @@ static int f_terminal_resize(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   int x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
   terminal_resize(terminal, x, y);
+  return 0;
 }
 
 
@@ -881,6 +887,7 @@ static int f_terminal_focused(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   if (terminal->reporting_focus)
     terminal_input(terminal, lua_toboolean(L, 2) ? "\x1B[" : "\x1B[O", 3);
+  return 0;
 }
 
 static int f_terminal_pastemode(lua_State* L) {
