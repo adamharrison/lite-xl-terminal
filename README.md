@@ -33,6 +33,14 @@ Currently pre-release. Still has major issues. Use at your own risk. See TODO, b
 
 Target release date is August 1st, 2023.
 
+### Supported Shells
+
+The following shells are tested on each release to ensure that they actually function:
+
+* bash
+* dash
+* zsh
+
 ## Description
 
 A simple, and straightforward terminal that presents itself as `xterm-256color`. Supports:
@@ -44,16 +52,14 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 5. Configurable shell.
 6. Selecting from terminal.
 7. Copying from terminal.
+8. UTF-8 support.
+9. Terminal resizing.
 
 Ships with bash, for windows; assumes that Mac and Linux already have bash.
 
 ## TODO
 
 * Ensure that locked scrollback regions work correctly. (Hard)
-* Make it so that resizing the terminal doesn't clear the main buffer, and transfers data to any new buffer appropriately. (Easy)
-* Add in additional key combinations like `alt`+`left`. (Easy)
 * Windows support. (Hard)
-* Testing alternate shells. (?)
 * Expanding escape code handling. (?)
 * Make terminal vertically resizable. (Easy)
-* Transcribe utf-8 characters correctly. (Easy)

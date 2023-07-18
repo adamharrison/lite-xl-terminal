@@ -129,6 +129,14 @@ function TerminalView:update()
 end
 
 
+function TerminalView:set_target_size(axis, value)
+  if axis == "y" then
+    self.size.y = value
+    return true
+  end
+end
+
+
 function TerminalView:draw()
   TerminalView.super.draw_background(self, config.plugins.terminal.background)
   if self.terminal then
@@ -191,7 +199,13 @@ command.add(TerminalView, {
   ["terminal:suspend"] = function() view.terminal:input("\x1A") end,
   ["terminal:redraw"] = function() view.terminal:redraw() end,
   ["terminal:tab"] = function() view.terminal:input("\t") end,
-  ["terminal:paste"] = function() view.terminal:input(system.get_clipboard()) end,
+  ["terminal:paste"] = function()
+    if view.terminal:paste_mode() == "bracketed" then
+      view.terminal:input("\x1B[200~" .. system.get_clipboard() .. "\x1B[201~")
+    else
+      view.terminal:input(system.get_clipboard())
+    end
+  end,
   ["terminal:scrollup"] = function() view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
   ["terminal:scrolldown"] = function() view.terminal:scrollback(view.terminal:scrollback() - view.lines) end,
   ["terminal:up"] = function() view.terminal:input("\x1B[A") end,

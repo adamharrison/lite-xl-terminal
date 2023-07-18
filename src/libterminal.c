@@ -146,6 +146,27 @@ static int utf8_to_codepoint(const char *p, unsigned *dst) {
   return ((const char*)up + 1) - p;
 }
 
+static int codepoint_to_utf8(unsigned int codepoint, char* target) {
+  if (codepoint < 128) {
+    *(target++) = codepoint;
+    return 1;
+  } else if (codepoint < 2048) {
+    *(target++) = 0xC0 | (codepoint >> 6);
+    *(target++) = 0x80 | ((codepoint >> 0) & 0x3F);
+    return 2;
+  } else if (codepoint < 65536) {
+    *(target++) = 0xE0 | (codepoint >> 12);
+    *(target++) = 0x80 | ((codepoint >> 6) & 0x3F);
+    *(target++) = 0x80 | ((codepoint >> 0) & 0x3F);
+    return 3;
+  }
+  *(target++) = 0xF0 | (codepoint >> 18);
+  *(target++) = 0x80 | ((codepoint >> 12) & 0x3F);
+  *(target++) = 0x80 | ((codepoint >> 6) & 0x3F);
+  *(target++) = 0x80 | ((codepoint >> 0) & 0x3F);
+  return 4;
+}
+
 static int terminal_scrollback(terminal_t* terminal, int target) {
   if (!terminal->scrollback_buffer_start || target <= 0) {
     terminal->scrollback_target = NULL;
@@ -665,12 +686,17 @@ static void terminal_free(terminal_t* terminal) {
 static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   struct winsize size = { .ws_row = lines, .ws_col = columns, .ws_xpixel = 0, .ws_ypixel = 0 };
   ioctl(terminal->master, TIOCSWINSZ, &size);
+  for (int i = 0; i < VIEW_MAX; ++i) {
+    buffer_char_t* buffer = malloc(sizeof(buffer_char_t) * columns * lines);
+    memset(buffer, 0, sizeof(buffer_char_t) * columns * lines);
+    int max_lines = min(terminal->lines, lines);
+    for (int y = 0; y < max_lines; ++y)
+      memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));
+    free(terminal->views[i].buffer);
+    terminal->views[i].buffer = buffer;
+  }
   terminal->columns = columns;
   terminal->lines = lines;
-  for (int i = 0; i < VIEW_MAX; ++i) {
-    terminal->views[i].buffer = realloc(terminal->views[i].buffer, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
-    memset(terminal->views[i].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
-  }
 }
 
 static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* pathname, const char** argv) {
@@ -724,7 +750,10 @@ static int output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
       if (start >= end)
         break;
     }
-    text_buffer[block_size++] = start->codepoint != 0 ? (char)start->codepoint : ' ';
+    if (start->codepoint != 0) {
+      block_size += codepoint_to_utf8(start->codepoint, &text_buffer[block_size]);
+    } else
+      text_buffer[block_size++] = ' ';
     ++start;
   }
 }
@@ -854,10 +883,11 @@ static int f_terminal_focused(lua_State* L) {
     terminal_input(terminal, lua_toboolean(L, 2) ? "\x1B[" : "\x1B[O", 3);
 }
 
-static int f_terminal_sleep(lua_State* L) {
-  sleep(luaL_checkinteger(L, 1));
+static int f_terminal_pastemode(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  lua_pushstring(L, terminal->paste_mode == PASTE_BRACKETED ? "bracketed" : "normal");
+  return 1;
 }
-
 
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc         },
@@ -869,8 +899,8 @@ static const luaL_Reg terminal_api[] = {
   { "exited",        f_terminal_exited     },
   { "cursor",        f_terminal_cursor     },
   { "focused",       f_terminal_focused    },
+  { "pastemode",     f_terminal_pastemode  },
   { "scrollback",    f_terminal_scrollback },
-  { "sleep",         f_terminal_sleep      },
   { NULL,            NULL                  }
 };
 
