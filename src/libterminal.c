@@ -694,10 +694,12 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   for (int i = 0; i < VIEW_MAX; ++i) {
     buffer_char_t* buffer = malloc(sizeof(buffer_char_t) * columns * lines);
     memset(buffer, 0, sizeof(buffer_char_t) * columns * lines);
-    int max_lines = min(terminal->lines, lines);
-    for (int y = 0; y < max_lines; ++y)
-      memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));
-    free(terminal->views[i].buffer);
+    if (terminal->views[i].buffer) {
+      int max_lines = min(terminal->lines, lines);
+      for (int y = 0; y < max_lines; ++y)
+        memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));
+      free(terminal->views[i].buffer);
+    }
     terminal->views[i].buffer = buffer;
     terminal->views[i].cursor_x = min(terminal->views[i].cursor_x, columns - 1);
     terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, lines - 1);
