@@ -1,0 +1,62 @@
+name: CI
+on: { push: { branches: [master] } }
+jobs:
+  build_linux_windows:
+    runs-on: ubuntu-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with: { fetch-depth: 0 }
+      - name: Set Environment Variables
+        run: |
+          git config --global user.name "Github Actions" && git config --global user.email "adamdharrison@gmail.com"
+          echo VERSION=`git describe --tags --abbrev=0 --match "v*" | tail -c +2` >> $GITHUB_ENV
+      - name: Clone Submodules
+        run: git submodule update --init --depth=1
+      - name: Build Linux
+        run: |
+          BIN=libterminal.x86_64-linux.so ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-linux'"'
+      - name: Build Windows
+        run: |
+          sudo apt-get install mingw-w64
+          # BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-windows'"'
+      - name: Create Release(s)
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
+        run: |
+          gh release delete -y continuous || true; gh release create -t 'Continuous Release' continuous *.so
+          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+            gh release delete -y v$VERSION || true;
+            gh release create -t v$VERSION v$VERSION *.so
+            gh release delete -y latest || true;
+            gh release create -t latest latest *.so
+          fi
+
+  build_macos:
+    needs: build_linux_windows
+    runs-on: macos-11
+    env:
+      CC: clang
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with: { fetch-depth: 0 }
+      - name: Set Environment Variables
+        run: echo VERSION=`git describe --tags --abbrev=0  --match "v*" | tail -c +2` >> $GITHUB_ENV
+      - name: Clone Submodules
+        run: git submodule update --init --depth=1
+      - name: Build MacOS
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
+        run: |
+          ./build.sh clean
+          BIN=libterminal.x86_64-darwin.so ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-darwin'"'
+          BIN=libterminal.aarch64-darwin.so CC=clang CFLAGS="-arch arm64" ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-darwin'"'
+          gh release upload continuous *.so
+          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+            gh release upload v$VERSION *.so
+            gh release upload latest *.so
+            git branch -f latest HEAD
+            git tag -f latest
+            git push -f origin refs/heads/latest
+            git push -f origin refs/tags/latest
+          fi

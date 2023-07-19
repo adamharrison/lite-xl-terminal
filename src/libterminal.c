@@ -215,10 +215,7 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
   return terminal->scrollback_position;
 }
 
-static void terminal_output(terminal_t* terminal, const char* str, int len);
-
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
-  //terminal_output(terminal, str, len);
   write(terminal->master, str, len);
 }
 
@@ -306,6 +303,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   fprintf(stderr, "\n");
   #endif
   view_t* view = &terminal->views[terminal->current_view];
+  int unhandled = 0;
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
     switch (seq[seq_end]) {
@@ -325,7 +323,6 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         } else {
           view->cursor_y = parse_number(&seq[2], 1) - 1;
           view->cursor_x = parse_number(&seq[semicolon+1], 1) - 1;
-          //fprintf(stderr, "SET CURSOR TO %d %d (%d %d)\n", view->cursor_x, view->cursor_y, terminal->columns, terminal->lines);
         }
       } break;
       case 'J':  {
@@ -385,11 +382,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
-            default:
-              #ifdef LIBTERMINAL_DEBUG_ESCAPE
-                fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
-              #endif
-            break;
+            default: unhandled = 1; break;
           }
         }
       } break;
@@ -402,11 +395,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 2004: terminal->paste_mode = PASTE_NORMAL; break;
-            default:
-              #ifdef LIBTERMINAL_DEBUG_ESCAPE
-                fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
-              #endif
-            break;
+            default: unhandled = 1; break;
           }
         }
       } break;
@@ -483,11 +472,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           char buffer[8];
           int length = snprintf(buffer, sizeof(buffer), "\x1B[%d;%d", view->cursor_y, view->cursor_x);
           terminal_input(terminal, buffer, length);
-        } else {
-          #ifdef LIBTERMINAL_DEBUG_ESCAPE
-            fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
-          #endif
-        }
+        } else
+          unhandled = 1;
       } break;
       case 'r': {
         int semicolon = -1;
@@ -499,13 +485,15 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           //view->scrolling_region_end = parse_number(&seq[semicolon+1], 1) - 1;
         }
       } break;
-      default:
-        #ifdef LIBTERMINAL_DEBUG_ESCAPE
-          fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
-        #endif
-        return -1;
-      break;
+      default: unhandled = 1; break;
     }
+  }
+
+  if (unhandled) {
+    #ifdef LIBTERMINAL_DEBUG_ESCAPE
+      fprintf(stderr, "UNKNOWN ESCAPE SEQUENCE\n");
+    #endif
+    return -1;
   }
   return 0;
 }
@@ -673,17 +661,26 @@ static int terminal_update(terminal_t* terminal) {
   return -1;
 }
 
-static void terminal_free(terminal_t* terminal) {
+static int terminal_close(terminal_t* terminal) {
   terminal_clear_scrollback_buffer(terminal);
   for (int i = 0; i < VIEW_MAX; ++i) {
     if (terminal->views[i].buffer)
       free(terminal->views[i].buffer);
+    terminal->views[i].buffer = NULL;
   }
   if (terminal->pid) {
     close(terminal->master);
+    kill(terminal->pid, SIGTERM);
     int status;
-    waitpid(terminal->pid, &status, 0);
+    if (waitpid(terminal->pid, &status, WNOHANG))
+      terminal->pid = 0;
   }
+}
+
+static void terminal_free(terminal_t* terminal) {
+  terminal_close(terminal);
+  if (terminal->pid)
+    kill(terminal->pid, SIGKILL);
   free(terminal);
 }
 
@@ -698,6 +695,8 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
       memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));
     free(terminal->views[i].buffer);
     terminal->views[i].buffer = buffer;
+    terminal->views[i].cursor_x = min(terminal->views[i].cursor_x, terminal->columns);
+    terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, terminal->lines);
   }
   terminal->columns = columns;
   terminal->lines = lines;
@@ -710,7 +709,6 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     terminal->views[i].scrolling_region_start = -1;
   }
   struct termios term = {0};
-  // if(tcgetattr(0, &term) < 0) { exit(-1); }
   term.c_cc[VINTR] = 127;
   term.c_cc[VSUSP] = 26;
   term.c_cc[VERASE] = '\b';
@@ -831,6 +829,11 @@ static int f_terminal_gc(lua_State* L) {
   return 0;
 }
 
+static int f_terminal_close(lua_State* L) {
+  lua_pushinteger(L, terminal_close(*(terminal_t**)lua_touserdata(L, 1)));
+  return 1;
+}
+
 static int f_terminal_update(lua_State* L){
   int status = terminal_update(*(terminal_t**)lua_touserdata(L, 1));
   lua_pushboolean(L, status != 0);
@@ -856,8 +859,7 @@ static int f_terminal_exited(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   int status;
   if (waitpid(terminal->pid, &status, WNOHANG) > 0) {
-    assert(WIFEXITED(status));
-    lua_pushinteger(L, WEXITSTATUS(status));
+    lua_pushinteger(L, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
   } else
     lua_pushboolean(L, 0);
   return 1;
@@ -899,6 +901,7 @@ static int f_terminal_pastemode(lua_State* L) {
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc         },
   { "new",           f_terminal_new        },
+  { "close",         f_terminal_close      },
   { "input",         f_terminal_input      },
   { "lines",         f_terminal_lines      },
   { "resize",        f_terminal_resize     },

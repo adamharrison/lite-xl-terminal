@@ -5,4 +5,5 @@
 
 CFLAGS="$CFLAGS -fPIC -Ilib/lite-xl/resources/include"
 
+[[ "$@" == "clean" ]] && rm -f *.so *.dll
 $CC $CFLAGS src/*.c $@ -shared -o $BIN

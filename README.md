@@ -37,9 +37,10 @@ Target release date is August 1st, 2023.
 
 The following shells are tested on each release to ensure that they actually function:
 
-* bash
-* dash
-* zsh
+* bash (Linux/Mac)
+* dash (Linux/Mac)
+* zsh (Linux/Mac)
+* cmd.exe (Windows)
 
 ## Description
 
@@ -62,4 +63,3 @@ Ships with bash, for windows; assumes that Mac and Linux already have bash.
 * Ensure that locked scrollback regions work correctly. (Hard)
 * Windows support. (Hard)
 * Expanding escape code handling. (?)
-* Make terminal vertically resizable. (Easy)
