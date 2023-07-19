@@ -12,6 +12,10 @@
       "arch": "x86_64-darwin",
       "checksum": "SKIP"
     }, {
+      "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.aarch64-darwin.so",
+      "arch": "aarch64-darwin",
+      "checksum": "SKIP"
+    }, {
       "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.x86_64-windows.dll",
       "arch": "x86_64-windows",
       "checksum": "SKIP"

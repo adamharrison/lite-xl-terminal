@@ -675,7 +675,10 @@ static int terminal_close(terminal_t* terminal) {
     int status;
     if (waitpid(terminal->pid, &status, WNOHANG))
       terminal->pid = 0;
+    else
+      return -1;
   }
+  return 0;
 }
 
 static void terminal_free(terminal_t* terminal) {
