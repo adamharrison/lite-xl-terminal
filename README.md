@@ -8,17 +8,16 @@ The easiest way to install `lite-xl-terminal` **will be** to use [`lpm`](https:/
 then run the following command:
 
 ```
-lpm install terminal
+lpm add https://github.com/adamharrison/lite-xl-terminal.git && lpm install terminal
 ```
 
 If you want to simply try it out, you can use `lpm`'s `run` command:
 
 ```
-lpm run terminal
+lpm run https://github.com/adamharrison/lite-xl-terminal.git terminal
 ```
 
-Because we're not released yet, this won't work yet, so you'll have to build the thing manually,
-and copy it into lite like so:
+If you want to grab it
 
 ```
 git clone --depth=1 https://github.com/adamharrison/lite-xl-terminal.git --recurse-submodules --shallow-submodules
