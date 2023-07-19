@@ -27,6 +27,10 @@ git clone --depth=1 https://github.com/adamharrison/lite-xl-terminal.git --recur
 
 Until we're released.
 
+## Usage
+
+You can activate the terminal by either pressing `ctrl+t`, or running the `Terminal: Toggle` command.
+
 ## Status
 
 Currently pre-release. Still has major issues. Use at your own risk. See TODO, below.
