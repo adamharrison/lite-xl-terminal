@@ -1,6 +1,6 @@
 # lite-xl-terminal
 
-`lite-xl-terminal` is a (mostly) fully-featured terminal emulator designed to slot into lite-xl as a plugin for windows, mac and linux.
+`lite-xl-terminal` is a (mostly) fully-featured terminal emulator designed to slot into lite-xl as a plugin for ~~windows~~ (forthcoming), mac and linux.
 
 ## Installation
 
@@ -17,7 +17,7 @@ If you want to simply try it out, you can use `lpm`'s `run` command:
 lpm run https://github.com/adamharrison/lite-xl-terminal.git terminal
 ```
 
-If you want to grab it
+If you want to grab it directly, and build it from the repo, you can do:
 
 ```
 git clone --depth=1 https://github.com/adamharrison/lite-xl-terminal.git --recurse-submodules --shallow-submodules
