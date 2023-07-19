@@ -671,7 +671,7 @@ static int terminal_close(terminal_t* terminal) {
   }
   if (terminal->pid) {
     close(terminal->master);
-    kill(terminal->pid, SIGTERM);
+    kill(terminal->pid, SIGHUP);
     int status;
     if (waitpid(terminal->pid, &status, WNOHANG))
       terminal->pid = 0;
