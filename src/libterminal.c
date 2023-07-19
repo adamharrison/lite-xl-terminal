@@ -699,8 +699,8 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
       memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));
     free(terminal->views[i].buffer);
     terminal->views[i].buffer = buffer;
-    terminal->views[i].cursor_x = min(terminal->views[i].cursor_x, terminal->columns);
-    terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, terminal->lines);
+    terminal->views[i].cursor_x = min(terminal->views[i].cursor_x, columns - 1);
+    terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, lines - 1);
   }
   terminal->columns = columns;
   terminal->lines = lines;
