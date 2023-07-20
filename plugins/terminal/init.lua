@@ -11,7 +11,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 
 config.plugins.terminal = common.merge({
-  shell = "bash",
+  shell = (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh"),
   arguments = { },
   scrollback_limit = 10000,
   height = 300,

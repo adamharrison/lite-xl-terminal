@@ -62,7 +62,7 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 8. UTF-8 support.
 9. Terminal resizing.
 
-Ships with bash, for windows; assumes that Mac and Linux already have bash.
+By default, will use `sh` on linux and mac (though this is configurable), and `cmd.exe` on windows.
 
 ## TODO
 
