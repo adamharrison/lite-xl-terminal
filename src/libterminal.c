@@ -804,6 +804,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
       success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
     }
+    terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
     if (!success) {
       free(terminal);
       return NULL;

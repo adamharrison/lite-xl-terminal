@@ -62,7 +62,7 @@ the native OS libraries for each OS.
 #### Linux -> Windows
 
 ```
-CC=x86_64-w64-mingw32-gcc ./build.sh
+CC= x86_64-w64-mingw32-gcc BIN=libterminal.dll ./build.sh
 ```
 
 ## Description

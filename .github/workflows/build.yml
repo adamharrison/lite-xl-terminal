@@ -21,7 +21,7 @@ jobs:
       - name: Build Windows
         run: |
           sudo apt-get install mingw-w64
-          # BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-windows'"'
+          BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-windows'"'
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
