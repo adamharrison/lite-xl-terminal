@@ -131,6 +131,12 @@ typedef struct {
   #if _WIN32
     PROCESS_INFORMATION process_information;
     HPCON hpcon;
+    HANDLE topty;
+    HANDLE frompty;
+    char nonblocking_buffer[LIBTERMINAL_CHUNK_SIZE];   // Oh my god, I hate windows so much.
+    int nonblocking_buffer_length;
+    HANDLE nonblocking_buffer_mutex;
+    HANDLE nonblocking_thread;
   #else
     int master;                                        // FD for pty.
     pid_t pid;                                         // pid for shell.
@@ -222,7 +228,7 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
 
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
   #ifdef _WIN32
-
+    WriteFile(terminal->topty, str, len, NULL, NULL);
   #else
     write(terminal->master, str, len);
   #endif
@@ -650,21 +656,40 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   }
 }
 
+#ifdef _WIN32
+  static DWORD windows_nonblocking_thread_callback(void* data) {
+    terminal_t* terminal = (terminal_t*)data;
+    char chunk_buffer[LIBTERMINAL_CHUNK_SIZE];
+    while (1) {
+      DWORD bytes_read;
+      if (sizeof(chunk_buffer) - terminal->nonblocking_buffer_length > 0) {
+        if (!ReadFile(terminal->frompty, chunk_buffer, sizeof(chunk_buffer) - terminal->nonblocking_buffer_length, &bytes_read, NULL))
+          break;
+        if (bytes_read > 0) {
+          WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
+          memcpy(&terminal->nonblocking_buffer[terminal->nonblocking_buffer_length], chunk_buffer, bytes_read);
+          ReleaseMutex(terminal->nonblocking_buffer_mutex);
+        }
+      }
+      Sleep(1);
+    }
+  }
+#endif
+
 static int terminal_update(terminal_t* terminal) {
   char chunk[LIBTERMINAL_CHUNK_SIZE];
   int len, at_least_one = 0;
   #ifdef _WIN32
-
+    WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
+    if (terminal->nonblocking_buffer_length > 0) {
+      terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length);
+      at_least_one = 1;
+    }
+    ReleaseMutex(terminal->nonblocking_buffer_mutex);
+    return at_least_one;
   #else
     do {
       len = read(terminal->master, chunk, sizeof(chunk));
-      /*if (len > 0) {
-        fprintf(stderr, "LEN: %d\n", len);
-        fflush(stderr);
-        FILE* file = fopen("/tmp/testw", "ab");
-        fwrite(chunk, sizeof(char), len, file);
-        fclose(file);
-      }*/
       if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return at_least_one;
       terminal_output(terminal, chunk, len);
@@ -682,7 +707,18 @@ static int terminal_close(terminal_t* terminal) {
     terminal->views[i].buffer = NULL;
   }
   #if _WIN32
-
+    if (terminal->nonblocking_thread)
+      TerminateThread(terminal->nonblocking_thread, 0);
+    if (terminal->topty)
+      CloseHandle(terminal->topty);
+    if (terminal->frompty)
+      CloseHandle(terminal->frompty);
+    if (terminal->hpcon)
+      ClosePseudoConsole(terminal->hpcon);
+    if (terminal->nonblocking_buffer_mutex)
+      CloseHandle(terminal->nonblocking_buffer_mutex);
+    if (terminal->process_information.hProcess)
+      TerminateProcess(terminal->process_information.hProcess, 1);
   #else
     if (terminal->pid) {
       close(terminal->master);
@@ -709,7 +745,8 @@ static void terminal_free(terminal_t* terminal) {
 
 static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   #ifdef _WIN32
-
+    COORD size = { columns, lines };
+    ResizePseudoConsole(terminal->hpcon, size);
   #else
     struct winsize size = { .ws_row = lines, .ws_col = columns, .ws_xpixel = 0, .ws_ypixel = 0 };
     ioctl(terminal->master, TIOCSWINSZ, &size);
@@ -731,25 +768,42 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   terminal->lines = lines;
 }
 
-static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* pathname, const char** argv) {
+static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* term_env, const char* pathname, const char** argv) {
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
   for (int i = 0; i < VIEW_MAX; ++i) {
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
   }
   #ifdef _WIN32
-    HANDLE out_pipe_our_side, in_pipe_our_side;
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
-    CreatePipe(&in_pipe_pseudo_console_side, &in_pipe_our_side, NULL, 0);
-    CreatePipe(&out_pipe_our_side, &out_pipe_pseudo_console_side, NULL, 0);
+    CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, NULL, 0);
+    CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, NULL, 0);
+    terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
     CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
     STARTUPINFOEXW siEx = {0};
-    InitializeStartupInfoAttachedToConPTY(&siEx, terminal->hpcon);
-    int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
-    wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
-    len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-    BOOL success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
+    siEx.StartupInfo.cb = sizeof(STARTUPINFOEX);
+    BOOL success = TRUE;
+
+    size_t list_size;
+    // Create the appropriately sized thread attribute list
+    InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
+    siEx.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(sizeof(BYTE)*list_size);
+    if (InitializeProcThreadAttributeList(siEx.lpAttributeList, 1, 0, (PSIZE_T)&list_size)) {
+        // Set thread attribute list's Pseudo Console to the specified ConPTY
+        if (!UpdateProcThreadAttribute(siEx.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, &terminal->hpcon, sizeof(HPCON), NULL, NULL))
+          success = FALSE;
+    } else {
+      success = FALSE;
+    }
+    free(siEx.lpAttributeList);
+
+    if (success) {
+      int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
+      wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
+      len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
+      success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
+    }
     if (!success) {
       free(terminal);
       return NULL;
@@ -770,7 +824,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       return NULL;
     }
     if (!terminal->pid) {
-      setenv("TERM", "xterm-256color", 1);
+      setenv("TERM", term_env, 1);
       execvp(pathname,  (char** const)argv);
       exit(-1);
       return NULL;
@@ -845,13 +899,14 @@ static int f_terminal_new(lua_State* L) {
   int x = luaL_checkinteger(L, 1);
   int y = luaL_checkinteger(L, 2);
   int scrollback_limit = luaL_checkinteger(L, 3);
-  const char* path = luaL_checkstring(L, 4);
+  const char* term_env = luaL_checkstring(L, 4);
+  const char* path = luaL_checkstring(L, 5);
   char* arguments[256];
   arguments[0] = (char*)path;
   arguments[1] = NULL;
-  if (lua_type(L, 5) == LUA_TTABLE) {
+  if (lua_type(L, 6) == LUA_TTABLE) {
     for (int i = 0; i < 255; ++i) {
-      lua_rawgeti(L, 5, i+1);
+      lua_rawgeti(L, 6, i+1);
       if (!lua_isnil(L, -1)) {
         const char* str = luaL_checkstring(L, -1);
         arguments[i+1] = strdup(str);
@@ -863,7 +918,7 @@ static int f_terminal_new(lua_State* L) {
       }
     }
   }
-  terminal_t* terminal = terminal_new(x, y, scrollback_limit, path, (const char**)arguments);
+  terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments);
   terminal_t** pointer = lua_newuserdata(L, sizeof(terminal_t*));
   *pointer = terminal;
   luaL_setmetatable(L, "libterminal");
@@ -906,7 +961,11 @@ static int f_terminal_resize(lua_State* L) {
 static int f_terminal_exited(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   #if _WIN32
-
+    DWORD exit_code;
+    if (GetExitCodeProcess(terminal->process_information.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
+      lua_pushinteger(L, exit_code);
+    } else
+      lua_pushboolean(L, 0);
   #else
     int status;
     if (waitpid(terminal->pid, &status, WNOHANG) > 0) {

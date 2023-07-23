@@ -1,6 +1,6 @@
 # lite-xl-terminal
 
-`lite-xl-terminal` is a (mostly) fully-featured terminal emulator designed to slot into lite-xl as a plugin for ~~windows~~ (forthcoming), mac and linux.
+`lite-xl-terminal` is a (mostly) fully-featured terminal emulator designed to slot into lite-xl as a plugin for windows (Windows 10+ only), mac and linux.
 
 ![image](https://github.com/adamharrison/lite-xl-terminal/assets/1034518/6b8003da-d4c1-4227-8fc9-3d2b1ae89bf2)
 
@@ -46,7 +46,24 @@ The following shells are tested on each release to ensure that they actually fun
 * bash (Linux/Mac)
 * dash (Linux/Mac)
 * zsh (Linux/Mac)
-* cmd.exe (Windows)
+* cmd.exe (Windows 10+)
+
+### Building
+
+As this is a native plugin, it requires building. Currently it has no dependencies other than
+the native OS libraries for each OS.
+
+#### Linux, Mac, and Windows MSYS
+
+```
+./build.sh
+```
+
+#### Linux -> Windows
+
+```
+CC=x86_64-w64-mingw32-gcc ./build.sh
+```
 
 ## Description
 
@@ -67,5 +84,4 @@ By default, will use `sh` on linux and mac (though this is configurable), and `c
 ## TODO
 
 * Ensure that locked scrollback regions work correctly. (Hard)
-* Windows support. (Hard)
 * Expanding escape code handling. (?)
