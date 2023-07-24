@@ -777,34 +777,31 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   #ifdef _WIN32
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
-    CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, NULL, 0);
-    CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, NULL, 0);
-    terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
-    CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
-    STARTUPINFOEXW siEx = {0};
-    siEx.StartupInfo.cb = sizeof(STARTUPINFOEX);
-    BOOL success = TRUE;
-
-    size_t list_size;
-    // Create the appropriately sized thread attribute list
-    InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
-    siEx.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(sizeof(BYTE)*list_size);
-    if (InitializeProcThreadAttributeList(siEx.lpAttributeList, 1, 0, (PSIZE_T)&list_size)) {
-        // Set thread attribute list's Pseudo Console to the specified ConPTY
-        if (!UpdateProcThreadAttribute(siEx.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, &terminal->hpcon, sizeof(HPCON), NULL, NULL))
-          success = FALSE;
-    } else {
-      success = FALSE;
-    }
-    free(siEx.lpAttributeList);
-
+    BOOL success =
+      CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, NULL, 0) &&
+      CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, NULL, 0) &&
+      CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
     if (success) {
-      int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
-      wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
-      len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-      success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
+      terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
+
+      STARTUPINFOEXW si_ex = {0};
+      si_ex.StartupInfo.cb = sizeof(STARTUPINFOEX);
+      size_t list_size;
+      // Create the appropriately sized thread attribute list
+      InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
+      si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(sizeof(BYTE)*list_size);
+      success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, (PSIZE_T)&list_size) &&
+        !UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, &terminal->hpcon, sizeof(HPCON), NULL, NULL);
+      free(si_ex.lpAttributeList);
+
+      if (success) {
+        int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
+        wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
+        len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
+        success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
+      }
+      terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
     }
-    terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
     if (!success) {
       free(terminal);
       return NULL;
@@ -920,11 +917,13 @@ static int f_terminal_new(lua_State* L) {
     }
   }
   terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments);
+  for (int i = 1; i < 256 && arguments[i]; ++i)
+    free(arguments[i]);
+  if (!terminal)
+    return luaL_error(L, "error creating terminal");
   terminal_t** pointer = lua_newuserdata(L, sizeof(terminal_t*));
   *pointer = terminal;
   luaL_setmetatable(L, "libterminal");
-  for (int i = 1; i < 256 && arguments[i]; ++i)
-    free(arguments[i]);
   return 1;
 }
 
