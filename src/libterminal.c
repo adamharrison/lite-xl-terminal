@@ -668,6 +668,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         if (bytes_read > 0) {
           WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
           memcpy(&terminal->nonblocking_buffer[terminal->nonblocking_buffer_length], chunk_buffer, bytes_read);
+          terminal->nonblocking_buffer_length += bytes_read;
           ReleaseMutex(terminal->nonblocking_buffer_mutex);
         }
       }
@@ -685,6 +686,7 @@ static int terminal_update(terminal_t* terminal) {
       terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length);
       at_least_one = 1;
     }
+    terminal->nonblocking_buffer_length = 0;
     ReleaseMutex(terminal->nonblocking_buffer_mutex);
     return at_least_one;
   #else
