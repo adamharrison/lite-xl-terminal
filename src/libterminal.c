@@ -780,25 +780,30 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     BOOL success =
       CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, NULL, 0) &&
       CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, NULL, 0) &&
-      CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
+      !FAILED(CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon));
     if (success) {
       terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
 
       STARTUPINFOEXW si_ex = {0};
-      si_ex.StartupInfo.cb = sizeof(STARTUPINFOEX);
+      si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+      si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+      si_ex.StartupInfo.hStdInput = in_pipe_pseudo_console_side;
+      si_ex.StartupInfo.hStdOutput = out_pipe_pseudo_console_side;
+      si_ex.StartupInfo.hStdError = out_pipe_pseudo_console_side;
       size_t list_size;
       // Create the appropriately sized thread attribute list
       InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
-      si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(sizeof(BYTE)*list_size);
+      si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
       success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, (PSIZE_T)&list_size) &&
-        !UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, &terminal->hpcon, sizeof(HPCON), NULL, NULL);
+        !UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
       free(si_ex.lpAttributeList);
 
       if (success) {
         int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
         wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
         len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-        success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &siEx.StartupInfo, &terminal->process_information);
+        success = CreateProcessW(NULL, commandline, NULL, NULL, FALSE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
+        free(commandline);
       }
       terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
     }

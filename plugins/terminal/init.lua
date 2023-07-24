@@ -191,7 +191,7 @@ command.add(TerminalView, {
   ["terminal:backspace"] = function() core.active_view.terminal:input("\b") end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B\b") end,
   ["terminal:delete"] = function() core.active_view.terminal:input("\x1B[3~") end,
-  ["terminal:return"] = function() core.active_view.terminal:input("\n") end,
+  ["terminal:return"] = function() core.active_view.terminal:input(PLATFORM == "Windows" and "\r\n" or "\n") end,
   ["terminal:scroll"] = function(cmd, amount) core.active_view.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() core.active_view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
