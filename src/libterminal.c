@@ -795,7 +795,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
       si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
       success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, (PSIZE_T)&list_size) &&
-        !UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
+        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
       free(si_ex.lpAttributeList);
 
       if (success) {
