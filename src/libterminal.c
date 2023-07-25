@@ -341,8 +341,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_x = 0;
           view->cursor_y = 0;
         } else {
-          view->cursor_y = parse_number(&seq[2], 1) - 1;
-          view->cursor_x = parse_number(&seq[semicolon+1], 1) - 1;
+          view->cursor_y = max(min(parse_number(&seq[2], 1) - 1, terminal->lines - 1), 0);
+          view->cursor_x = max(min(parse_number(&seq[semicolon+1], 1) - 1, terminal->columns), 0);
         }
       } break;
       case 'J':  {
