@@ -781,6 +781,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
   }
+  terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
@@ -811,8 +812,9 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
         len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
         success = CreateProcessW(NULL, commandline, NULL, NULL, FALSE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
         free(commandline);
+        if (success)
+          terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
       }
-      terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
     }
     if (!success) {
       free(terminal);
@@ -827,7 +829,6 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     term.c_cc[VEOF] = 4;
     term.c_lflag |= ISIG | ECHO | ICANON;
     term.c_iflag |= IUTF8;
-    terminal->scrollback_limit = scrollback_limit;
     terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
     if (terminal->pid == -1) {
       free(terminal);
