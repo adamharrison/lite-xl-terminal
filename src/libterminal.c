@@ -505,8 +505,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       default: unhandled = 1; break;
     }
   } else if (type == ESCAPE_TYPE_OS) {
-    if (seq[2] == '0')
-      strncpy(terminal->name, seq, min(sizeof(terminal->name) - 1, strlen(seq)));
+    if (strlen(seq) >= 5 && seq[2] == '0' && seq[3] == ';')
+      strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
   }
 
   if (unhandled) {
