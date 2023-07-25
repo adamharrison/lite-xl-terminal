@@ -783,15 +783,17 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   }
   terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
+    SECURITY_ATTRIBUTES no_sec = { .nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE, .lpSecurityDescriptor = NULL };
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
     BOOL success =
-      CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, NULL, 0) &&
-      CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, NULL, 0) &&
+      CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) &&
+      CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0) &&
       !FAILED(CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon));
     if (success) {
       terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
 
+      HANDLE handles_to_inherit[] = { in_pipe_pseudo_console_side, out_pipe_pseudo_console_side };
       STARTUPINFOEXW si_ex = {0};
       si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
       si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
@@ -800,10 +802,11 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       si_ex.StartupInfo.hStdError = out_pipe_pseudo_console_side;
       size_t list_size;
       // Create the appropriately sized thread attribute list
-      InitializeProcThreadAttributeList(NULL, 1, 0, &list_size);
+      InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
       si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
-      success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 1, 0, (PSIZE_T)&list_size) &&
+      success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
         UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
+        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
       free(si_ex.lpAttributeList);
 
       if (success) {

@@ -13,6 +13,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 config.plugins.terminal = common.merge({
   term = "xterm-256color",
   shell = (os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")),
+  newline = "\n", -- cmd.exe requires \r\n; this is auto-set below.
   arguments = { },
   scrollback_limit = 10000,
   height = 300,
@@ -75,6 +76,7 @@ config.plugins.terminal = common.merge({
   }
 }, config.plugins.terminal)
 if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = style.code_font:copy(style.code_font:get_size(), { smoothing = true }) end
+if PLATFORM == "Windows" and config.plugins.terminal.shell:find("cmd.exe") then config.plugins.terminal.newline = "\r\n" end
 
 
 local TerminalView = View:extend()
@@ -192,7 +194,7 @@ command.add(TerminalView, {
   ["terminal:backspace"] = function() core.active_view.terminal:input("\b") end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B\b") end,
   ["terminal:delete"] = function() core.active_view.terminal:input("\x1B[3~") end,
-  ["terminal:return"] = function() core.active_view.terminal:input(PLATFORM == "Windows" and "\r\n" or "\n") end,
+  ["terminal:return"] = function() core.active_view.terminal:input(config.plugins.terminal.newline) end,
   ["terminal:scroll"] = function(cmd, amount) core.active_view.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() core.active_view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
