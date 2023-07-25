@@ -813,7 +813,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
         int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
         wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
         len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-        success = CreateProcessW(NULL, commandline, NULL, NULL, FALSE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
+        success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
         free(commandline);
         if (success)
           terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
