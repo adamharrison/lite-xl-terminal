@@ -12,7 +12,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 config.plugins.terminal = common.merge({
   term = "xterm-256color",
-  shell = (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh"),
+  shell = (os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")),
   arguments = { },
   scrollback_limit = 10000,
   height = 300,
@@ -80,12 +80,13 @@ if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font 
 local TerminalView = View:extend()
 local view
 
-function TerminalView:get_name() return "Terminal" end
+function TerminalView:get_name() return self.terminal and self.terminal:name() or "Terminal" end
 function TerminalView:supports_text_input() return true end
 
-function TerminalView:new()
+function TerminalView:new(options)
   TerminalView.super.new(self)
-  self.size.y = config.plugins.terminal.height
+  self.size.y = options.height
+  self.options = options
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
 end
@@ -97,7 +98,7 @@ function TerminalView:update()
     self.lines = math.floor((self.size.y - style.padding.y*2) / style.code_font:get_height())
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.lines, config.plugins.terminal.scrollback_limit, config.plugins.terminal.term, config.plugins.terminal.shell, config.plugins.terminal.arguments)
+        self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments)
       else
         self.terminal:resize(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }
@@ -123,6 +124,7 @@ function TerminalView:update()
         core.redraw = true
       end
     else
+      command.perform("terminal:toggle")
       self.terminal = nil
     end
   end
@@ -139,7 +141,7 @@ end
 
 
 function TerminalView:draw()
-  TerminalView.super.draw_background(self, config.plugins.terminal.background)
+  TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
     local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = style.code_font:get_width(" ")
@@ -162,13 +164,13 @@ function TerminalView:draw()
       end
       for i = 1, #line, 2 do
         local foreground_idx, background_idx, style_idx = (line[i] >> 16) & 0xFF, (line[i] >> 8) & 0xFF, line[i] & 0x0F
-        local foreground, background = foreground_idx ~= 0 and config.plugins.terminal.colors[foreground_idx], background_idx ~= 0 and config.plugins.terminal.colors[background_idx]
+        local foreground, background = foreground_idx ~= 0 and self.options.colors[foreground_idx], background_idx ~= 0 and self.options.colors[background_idx]
         local text = line[i+1]
-        local font = ((style_idx & 0x1) ~= 0) and config.plugins.terminal.bold_font or config.plugins.terminal.font
+        local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
         if background then
           renderer.draw_rect(x, y, font:get_width(text), lh, background)
         end
-        x = renderer.draw_text(font, text, x, y, foreground or config.plugins.terminal.text)
+        x = renderer.draw_text(font, text, x, y, foreground or self.options.text)
       end
       y = y + lh
     end
@@ -185,7 +187,6 @@ function TerminalView:on_text_input(text)
   end
 end
 
-local view
 
 command.add(TerminalView, {
   ["terminal:backspace"] = function() core.active_view.terminal:input("\b") end,
@@ -232,7 +233,7 @@ command.add(TerminalView, {
 command.add(nil, {
   ["terminal:toggle"] = function()
     if not view then
-      view = TerminalView()
+      view = TerminalView(config.plugins.terminal)
       local node = core.root_view:get_active_node()
       view.node = node:split("down", view, { y = true }, true)
       core.set_active_view(view)

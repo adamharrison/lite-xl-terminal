@@ -79,9 +79,9 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 8. UTF-8 support.
 9. Terminal resizing.
 
-By default, will use `sh` on linux and mac (though this is configurable), and `cmd.exe` on windows.
+By default, will use `$SHELL`, if present. If not, we will use `sh` on linux and mac
+(though this is configurable), and `c:\windows\system32\cmd.exe` on windows.
 
 ## TODO
 
 * Ensure that locked scrollback regions work correctly. (Hard)
-* Expanding escape code handling. (?)

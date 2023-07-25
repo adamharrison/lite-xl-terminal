@@ -50,6 +50,7 @@
 #define LIBTERMINAL_BACKBUFFER_PAGE_LINES 200
 #define LIBTERMINAL_CHUNK_SIZE 4096
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
+#define LIBTERMINAL_NAME_MAX 256
 
 
 typedef enum attributes_e {
@@ -127,6 +128,7 @@ typedef struct {
   view_t views[VIEW_MAX];                            // Normally just two buffers, normal, and alternate.
   paste_mode_e paste_mode;
   int reporting_focus;                               // Enables/disbles reporting focus.
+  char name[LIBTERMINAL_NAME_MAX];                   // Window name, set with OS command.
   char buffered_sequence[LIBTERMINAL_CHUNK_SIZE];
   #if _WIN32
     PROCESS_INFORMATION process_information;
@@ -251,7 +253,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   view_t* view = &terminal->views[terminal->current_view];
 
   if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
-    fprintf(stderr, "WAT %d %d\n", view->scrolling_region_start, view->scrolling_region_end);
+    // fprintf(stderr, "WAT %d %d\n", view->scrolling_region_start, view->scrolling_region_end);
     memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_end - 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start - 1));
     memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
   } else if (terminal->current_view == VIEW_NORMAL_BUFFER) {
@@ -502,6 +504,9 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       } break;
       default: unhandled = 1; break;
     }
+  } else if (type == ESCAPE_TYPE_OS) {
+    if (seq[2] == '0')
+      strncpy(terminal->name, seq, min(sizeof(terminal->name) - 1, strlen(seq)));
   }
 
   if (unhandled) {
@@ -1016,6 +1021,12 @@ static int f_terminal_pastemode(lua_State* L) {
   return 1;
 }
 
+static int f_terminal_name(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  lua_pushstring(L, terminal->name);
+  return 1;
+}
+
 static const luaL_Reg terminal_api[] = {
   { "__gc",          f_terminal_gc         },
   { "new",           f_terminal_new        },
@@ -1029,6 +1040,7 @@ static const luaL_Reg terminal_api[] = {
   { "focused",       f_terminal_focused    },
   { "pastemode",     f_terminal_pastemode  },
   { "scrollback",    f_terminal_scrollback },
+  { "name",          f_terminal_name       },
   { NULL,            NULL                  }
 };
 
