@@ -580,7 +580,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
       escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
       if (
         (escape_type == ESCAPE_TYPE_CSI && buffered_sequence_index > 2 && str[offset] >= 0x40 && str[offset] <= 0x7E) ||
-        (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a')) ||
+        (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a' || str[offset] == 0x1B)) ||
         (escape_type == ESCAPE_TYPE_UNKNOWN && str[offset] == 0x1B) ||
         (escape_type == ESCAPE_TYPE_FIXED_WIDTH && buffered_sequence_index == fixed_width)
       ) {
@@ -589,7 +589,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         view = &terminal->views[terminal->current_view];
         buffered_sequence_index = 0;
         terminal->buffered_sequence[0] = 0;
-        if (str[offset] == 0x1B && escape_type == ESCAPE_TYPE_UNKNOWN) {
+        if (str[offset] == 0x1B && (escape_type == ESCAPE_TYPE_UNKNOWN || escape_type == ESCAPE_TYPE_OS)) {
           escape_type = ESCAPE_TYPE_OPEN;
           terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
         } else {
