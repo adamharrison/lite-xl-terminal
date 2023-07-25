@@ -12,6 +12,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 local default_shell = os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
 config.plugins.terminal = common.merge({
+  debug = false,
   term = "xterm-256color",
   shell = default_shell,
   newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\n"),
@@ -102,7 +103,7 @@ function TerminalView:update()
     self.lines = math.floor((self.size.y - style.padding.y*2) / style.code_font:get_height())
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments)
+        self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
       else
         self.terminal:resize(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }

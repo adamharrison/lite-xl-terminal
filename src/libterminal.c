@@ -116,6 +116,7 @@ typedef struct view_t {
 
 
 typedef struct {
+  int debug;                                         // If true, dumps output to working directory in a file called `terminal.log`.
   backbuffer_page_t* scrollback_buffer_end;          // End of the linked list.
   backbuffer_page_t* scrollback_buffer_start;        // Beginning of linked list.
   backbuffer_page_t* scrollback_target;              // Target based on scrollback_position.
@@ -562,6 +563,11 @@ static terminal_escape_type_e parse_partial_sequence(const char* seq, int len, i
 }
 
 static void terminal_output(terminal_t* terminal, const char* str, int len) {
+  if (terminal->debug)  {
+    FILE* file = fopen("terminal.log", "ab");
+    fwrite(str, sizeof(char), len, file);
+    fclose(file);
+  }
   unsigned int codepoint;
   int offset = 0;
   int buffered_sequence_index = strlen(terminal->buffered_sequence);
@@ -934,7 +940,9 @@ static int f_terminal_new(lua_State* L) {
       }
     }
   }
+  int debug = lua_toboolean(L, 7);
   terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments);
+  terminal->debug = debug;
   for (int i = 1; i < 256 && arguments[i]; ++i)
     free(arguments[i]);
   if (!terminal)
