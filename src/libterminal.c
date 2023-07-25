@@ -119,7 +119,7 @@ typedef struct {
   backbuffer_page_t* scrollback_buffer_end;          // End of the linked list.
   backbuffer_page_t* scrollback_buffer_start;        // Beginning of linked list.
   backbuffer_page_t* scrollback_target;              // Target based on scrollback_position.
-  int scrollback_target_top_offset;                  // The offset that the top of the scrollback_target page is from the start of the buffer..
+  int scrollback_target_top_offset;                  // The offset that the top of the scrollback_target page is from the start of the buffer.
   int scrollback_total_lines;                        // Cached total amount of lines we can scroll bcak.
   int scrollback_position;                           // Canonical amount of lines we've scrolled back.
   int scrollback_limit;                              // The amount of lines we'll hold in memory maximum.
@@ -205,7 +205,8 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
       if (!current->prev) {
         terminal->scrollback_target = current;
         terminal->scrollback_position = current_top_offset;
-        return current_top_offset;
+        terminal->scrollback_target_top_offset = current_top_offset;
+        return terminal->scrollback_position;
       }
       current = current->prev;
       current_top_offset += current->line;
@@ -222,6 +223,7 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
     current = current->next;
   }
   terminal->scrollback_target = current;
+
   terminal->scrollback_target_top_offset = current_top_offset;
   terminal->scrollback_position = target;
   assert(terminal->scrollback_position >= 0);
