@@ -797,9 +797,9 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       STARTUPINFOEXW si_ex = {0};
       si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
       si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-      si_ex.StartupInfo.hStdInput = in_pipe_pseudo_console_side;
-      si_ex.StartupInfo.hStdOutput = out_pipe_pseudo_console_side;
-      si_ex.StartupInfo.hStdError = out_pipe_pseudo_console_side;
+      si_ex.StartupInfo.hStdInput = NULL;
+      si_ex.StartupInfo.hStdOutput = NULL;
+      si_ex.StartupInfo.hStdError = NULL;
       size_t list_size;
       // Create the appropriately sized thread attribute list
       InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
