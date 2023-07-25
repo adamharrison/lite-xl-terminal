@@ -10,10 +10,13 @@ local keymap = require "core.keymap"
 local terminal_native = require "plugins.terminal.libterminal"
 
 
+local default_shell = os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
 config.plugins.terminal = common.merge({
   term = "xterm-256color",
-  shell = (os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")),
-  newline = "\n", -- cmd.exe requires \r\n; this is auto-set below.
+  shell = default_shell,
+  newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\n"),
+  backspace = "\b",
+  delete = "\x1B[3~",
   arguments = { },
   scrollback_limit = 10000,
   height = 300,
@@ -76,7 +79,6 @@ config.plugins.terminal = common.merge({
   }
 }, config.plugins.terminal)
 if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = style.code_font:copy(style.code_font:get_size(), { smoothing = true }) end
-if PLATFORM == "Windows" and config.plugins.terminal.shell:find("cmd.exe") then config.plugins.terminal.newline = "\r\n" end
 
 
 local TerminalView = View:extend()
@@ -191,10 +193,10 @@ end
 
 
 command.add(TerminalView, {
-  ["terminal:backspace"] = function() core.active_view.terminal:input("\b") end,
+  ["terminal:backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace) end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B\b") end,
-  ["terminal:delete"] = function() core.active_view.terminal:input("\x1B[3~") end,
-  ["terminal:return"] = function() core.active_view.terminal:input(config.plugins.terminal.newline) end,
+  ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
+  ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.options.newline) end,
   ["terminal:scroll"] = function(cmd, amount) core.active_view.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1)) end,
   ["terminal:break"] = function() core.active_view.terminal:input("\x7F") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
