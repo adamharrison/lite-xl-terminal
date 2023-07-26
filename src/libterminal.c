@@ -654,8 +654,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x1F:
           break;
         default:
-          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
-          view->cursor_x++;
           if (view->cursor_x >= terminal->columns) {
             view->cursor_x = 0;
             if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
@@ -663,6 +661,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             else
               terminal_shift_buffer(terminal);
           }
+          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
+          view->cursor_x++;
         break;
       }
     }
@@ -976,11 +976,15 @@ static int f_terminal_input(lua_State* L) {
   return f_terminal_update(L);
 }
 
-static int f_terminal_resize(lua_State* L) {
+static int f_terminal_size(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  int x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
-  terminal_resize(terminal, x, y);
-  return 0;
+  if (lua_gettop(L) > 1) {
+    int x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
+    terminal_resize(terminal, x, y);
+  }
+  lua_pushinteger(L, terminal->columns);
+  lua_pushinteger(L, terminal->lines);
+  return 2;
 }
 
 
@@ -1037,7 +1041,10 @@ static int f_terminal_pastemode(lua_State* L) {
 
 static int f_terminal_name(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  lua_pushstring(L, terminal->name);
+  if (terminal->name[0])
+    lua_pushstring(L, terminal->name);
+  else
+    lua_pushnil(L);
   return 1;
 }
 
@@ -1047,7 +1054,7 @@ static const luaL_Reg terminal_api[] = {
   { "close",         f_terminal_close      },
   { "input",         f_terminal_input      },
   { "lines",         f_terminal_lines      },
-  { "resize",        f_terminal_resize     },
+  { "size",          f_terminal_size       },
   { "update",        f_terminal_update     },
   { "exited",        f_terminal_exited     },
   { "cursor",        f_terminal_cursor     },

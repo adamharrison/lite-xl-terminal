@@ -6,6 +6,7 @@ local style = require "core.style"
 local common = require "core.common"
 local View = require "core.view"
 local keymap = require "core.keymap"
+local StatusView = require "core.statusview"
 
 local terminal_native = require "plugins.terminal.libterminal"
 
@@ -105,7 +106,7 @@ function TerminalView:update()
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
       else
-        self.terminal:resize(self.columns, self.lines)
+        self.terminal:size(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }
       end
     end
@@ -251,6 +252,25 @@ command.add(nil, {
     end
   end
 })
+
+core.status_view:add_item({
+  predicate = function()
+    return core.active_view:is(TerminalView) and core.active_view.terminal
+  end,
+  name = "terminal:info",
+  alignment = StatusView.Item.RIGHT,
+  get_item = function()
+    local dv = core.active_view
+    local x, y = dv.terminal:size()
+    return {
+      style.text, style.font, (dv.terminal:name() or "Terminal"),
+      style.dim, style.font, core.status_view.separator2,
+      style.text, style.font, x .. "x" .. y
+    }
+  end
+})
+
+
 
 keymap.add {
   ["return"] = "terminal:return",
