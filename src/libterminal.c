@@ -445,8 +445,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 35 : view->cursor_styling.foreground = 5; break;
                 case 36 : view->cursor_styling.foreground = 6; break;
                 case 37 : view->cursor_styling.foreground = 7; break;
-                case 38 : view->cursor_styling.foreground = 0; break;
-                case 39 : state = DISPLAY_STATE_FOREGROUND_COLOR_MODE; break;
+                case 38 : state = DISPLAY_STATE_FOREGROUND_COLOR_MODE; break;
+                case 39 : view->cursor_styling.foreground = 0; break;
                 case 40 : view->cursor_styling.background = 0; break;
                 case 41 : view->cursor_styling.background = 1; break;
                 case 42 : view->cursor_styling.background = 2; break;
@@ -455,8 +455,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 45 : view->cursor_styling.background = 5; break;
                 case 46 : view->cursor_styling.background = 6; break;
                 case 47 : view->cursor_styling.background = 7; break;
-                case 48 : view->cursor_styling.background = 0; break;
-                case 49 : state = DISPLAY_STATE_BACKGROUND_COLOR_VALUE; break;
+                case 48 : state = DISPLAY_STATE_BACKGROUND_COLOR_MODE; break;
+                case 49 : view->cursor_styling.background = 0; break;
                 case 90 : view->cursor_styling.foreground = 251; break;
                 case 91 : view->cursor_styling.foreground = 160; break;
                 case 92 : view->cursor_styling.foreground = 119; break;
@@ -582,14 +582,14 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         (escape_type == ESCAPE_TYPE_CSI && buffered_sequence_index > 2 && str[offset] >= 0x40 && str[offset] <= 0x7E) ||
         (escape_type == ESCAPE_TYPE_OS && (str[offset] == '\0' || str[offset] == '\a' || str[offset] == 0x1B)) ||
         (escape_type == ESCAPE_TYPE_UNKNOWN && str[offset] == 0x1B) ||
-        (escape_type == ESCAPE_TYPE_FIXED_WIDTH && buffered_sequence_index == fixed_width)
+        (escape_type == ESCAPE_TYPE_FIXED_WIDTH && buffered_sequence_index == fixed_width || str[offset] == 0x1B)
       ) {
         terminal->buffered_sequence[buffered_sequence_index++] = 0;
         terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence);
         view = &terminal->views[terminal->current_view];
         buffered_sequence_index = 0;
         terminal->buffered_sequence[0] = 0;
-        if (str[offset] == 0x1B && (escape_type == ESCAPE_TYPE_UNKNOWN || escape_type == ESCAPE_TYPE_OS)) {
+        if (str[offset] == 0x1B && (escape_type == ESCAPE_TYPE_UNKNOWN || escape_type == ESCAPE_TYPE_OS || escape_type == ESCAPE_TYPE_FIXED_WIDTH)) {
           escape_type = ESCAPE_TYPE_OPEN;
           terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
         } else {
