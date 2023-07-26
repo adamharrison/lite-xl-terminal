@@ -146,6 +146,7 @@ function TerminalView:set_target_size(axis, value)
 end
 
 
+local COLOR_NOT_SET = 256
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
@@ -158,25 +159,32 @@ function TerminalView:draw()
     if should_redraw then core.redraw = true end
     for i, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + style.padding.x
+      local should_draw_cursor = false
       if mode ~= "hidden" and core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then
         if mode == "blinking" then
           local T = config.blink_period
           if (core.blink_timer - core.blink_start) % T < T / 2 then
-            renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
+            should_draw_cursor = true
           end
         else
-          renderer.draw_rect(x + space_width * cursor_x, y, space_width, lh, style.accent)
+          should_draw_cursor = true
         end
       end
+      local offset = 0
       for i = 1, #line, 2 do
-        local foreground_idx, background_idx, style_idx = (line[i] >> 16) & 0xFF, (line[i] >> 8) & 0xFF, line[i] & 0x0F
-        local foreground, background = foreground_idx ~= 0 and self.options.colors[foreground_idx], background_idx ~= 0 and self.options.colors[background_idx]
+        local foreground_idx, background_idx, style_idx = ((line[i] >> 17) & 0x1FF), ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
+        local foreground, background = foreground_idx ~= COLOR_NOT_SET and self.options.colors[foreground_idx], background_idx ~= COLOR_NOT_SET and self.options.colors[background_idx]
         local text = line[i+1]
         local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
         if background then
           renderer.draw_rect(x, y, font:get_width(text), lh, background)
         end
+        local length = text:ulen()
+        if should_draw_cursor and cursor_x >= offset and cursor_x < offset + length then
+          renderer.draw_rect(x + space_width * (cursor_x - offset), y, space_width, lh, style.accent)
+        end
         x = renderer.draw_text(font, text, x, y, foreground or self.options.text)
+        offset = offset + length
       end
       y = y + lh
     end
@@ -263,7 +271,7 @@ core.status_view:add_item({
     local dv = core.active_view
     local x, y = dv.terminal:size()
     return {
-      style.text, style.font, (dv.terminal:name() or "Terminal"),
+      style.text, style.font, (dv.terminal:name() or config.plugins.terminal.shell),
       style.dim, style.font, core.status_view.separator2,
       style.text, style.font, x .. "x" .. y
     }

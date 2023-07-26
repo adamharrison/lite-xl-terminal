@@ -51,7 +51,7 @@
 #define LIBTERMINAL_CHUNK_SIZE 4096
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
-
+#define LIBTERMINAL_COLOR_NOT_SET 256
 
 typedef enum attributes_e {
   ATTRIBUTE_NONE = 0,
@@ -63,8 +63,8 @@ typedef enum attributes_e {
 typedef struct buffer_styling_t {
   union {
     struct {
-      unsigned int foreground : 8;
-      unsigned int background : 8;
+      unsigned int foreground : 9;
+      unsigned int background : 9;
       unsigned int attributes : 4;
     };
     unsigned int value;
@@ -292,7 +292,7 @@ static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
     memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_x = 0;
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_y = 0;
-    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling.value = 0;
+    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 };
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_end = -1;
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_start = -1;
   }
@@ -433,7 +433,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           switch (state) {
             case DISPLAY_STATE_NONE:
               switch (parse_number(&seq[offset], 0)) {
-                case 0  : view->cursor_styling = (buffer_styling_t) { 0, 0, 0 }; break;
+                case 0  : view->cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }; break;
                 case 1  : view->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
                 case 3  : view->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
                 case 4  : view->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
@@ -446,7 +446,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 36 : view->cursor_styling.foreground = 6; break;
                 case 37 : view->cursor_styling.foreground = 7; break;
                 case 38 : state = DISPLAY_STATE_FOREGROUND_COLOR_MODE; break;
-                case 39 : view->cursor_styling.foreground = 0; break;
+                case 39 : view->cursor_styling.foreground = LIBTERMINAL_COLOR_NOT_SET; break;
                 case 40 : view->cursor_styling.background = 0; break;
                 case 41 : view->cursor_styling.background = 1; break;
                 case 42 : view->cursor_styling.background = 2; break;
@@ -456,7 +456,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 46 : view->cursor_styling.background = 6; break;
                 case 47 : view->cursor_styling.background = 7; break;
                 case 48 : state = DISPLAY_STATE_BACKGROUND_COLOR_MODE; break;
-                case 49 : view->cursor_styling.background = 0; break;
+                case 49 : view->cursor_styling.background = LIBTERMINAL_COLOR_NOT_SET; break;
                 case 90 : view->cursor_styling.foreground = 251; break;
                 case 91 : view->cursor_styling.foreground = 160; break;
                 case 92 : view->cursor_styling.foreground = 119; break;
@@ -788,6 +788,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   for (int i = 0; i < VIEW_MAX; ++i) {
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
+    terminal->views[i].cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 };
   }
   terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
@@ -867,7 +868,7 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
   buffer_styling_t style = start->styling;
   while (1) {
     if (start >= end || start->styling.value != style.value) {
-      lua_pushinteger(L, style.foreground << 16 | style.background << 8 | style.attributes);
+      lua_pushinteger(L, style.foreground << 17 | style.background << 8 | style.attributes);
       lua_rawseti(L, -2, ++group);
       lua_pushlstring(L, text_buffer, block_size);
       lua_rawseti(L, -2, ++group);
