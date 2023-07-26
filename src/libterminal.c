@@ -52,6 +52,7 @@
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
 #define LIBTERMINAL_COLOR_NOT_SET 256
+#define LIBTERMINAL_NO_STYLING (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }
 
 typedef enum attributes_e {
   ATTRIBUTE_NONE = 0,
@@ -292,7 +293,7 @@ static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
     memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_x = 0;
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_y = 0;
-    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 };
+    terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling = LIBTERMINAL_NO_STYLING;
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_end = -1;
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_start = -1;
   }
@@ -433,7 +434,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           switch (state) {
             case DISPLAY_STATE_NONE:
               switch (parse_number(&seq[offset], 0)) {
-                case 0  : view->cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }; break;
+                case 0  : view->cursor_styling = LIBTERMINAL_NO_STYLING; break;
                 case 1  : view->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
                 case 3  : view->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
                 case 4  : view->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
@@ -612,7 +613,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case '\b': {
           if (view->cursor_x) {
             --view->cursor_x;
-            view->buffer[view->cursor_y * terminal->lines + view->cursor_x].codepoint = ' ';
+            view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint = ' ';
+            view->buffer[view->cursor_y * terminal->columns + view->cursor_x].styling = LIBTERMINAL_NO_STYLING;
           }
         } break;
         case 0x09:
@@ -788,7 +790,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   for (int i = 0; i < VIEW_MAX; ++i) {
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
-    terminal->views[i].cursor_styling = (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 };
+    terminal->views[i].cursor_styling = LIBTERMINAL_NO_STYLING;
   }
   terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
