@@ -52,6 +52,7 @@
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
 #define LIBTERMINAL_COLOR_NOT_SET 256
+#define LIBTERMINAL_DEFAULT_TAB_SIZE 8
 #define LIBTERMINAL_NO_STYLING (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }
 
 typedef enum attributes_e {
@@ -113,6 +114,7 @@ typedef struct view_t {
   cursor_mode_e cursor_mode;
   keys_mode_e cursor_keys_mode;
   keys_mode_e keypad_keys_mode;
+  int tab_size;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
   // buffer. When applied, shifts cursor to the top, and allows you to write
@@ -646,8 +648,9 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             view->buffer[view->cursor_y * terminal->columns + view->cursor_x].styling = LIBTERMINAL_NO_STYLING;
           }
         } break;
-        case 0x09:
-        break;
+        case '\t': {
+          view->cursor_x = (view->cursor_x + view->tab_size) - ((view->cursor_x + view->tab_size) % view->tab_size);
+        } break;
         case '\n': {
           view->cursor_x = 0;
           if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
@@ -826,6 +829,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
     terminal->views[i].cursor_styling = LIBTERMINAL_NO_STYLING;
+    terminal->views[i].tab_size = LIBTERMINAL_DEFAULT_TAB_SIZE;
   }
   terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
