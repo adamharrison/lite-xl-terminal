@@ -213,7 +213,6 @@ command.add(TerminalView, {
   ["terminal:break"] = function() core.active_view.terminal:input("\x03") end,
   ["terminal:eof"] = function() core.active_view.terminal:input("\x04") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
-  ["terminal:redraw"] = function() core.active_view.terminal:redraw() end,
   ["terminal:tab"] = function() core.active_view.terminal:input("\t") end,
   ["terminal:paste"] = function()
     if core.active_view.terminal:paste_mode() == "bracketed" then
@@ -249,8 +248,34 @@ command.add(TerminalView, {
   ["terminal:f11"]  = function() core.active_view.terminal:input("\x1B[23~") end,
   ["terminal:f12"]  = function() core.active_view.terminal:input("\x1B[24~") end,
   ["terminal:escape"]  = function() core.active_view.terminal:input("\x1B") end,
-  ["terminal:copy"] = function() end
+  ["terminal:start"] = function() core.active_view.terminal:input("\x13") end,
+  ["terminal:stop"] = function() core.active_view.terminal:input("\x11") end,
+  ["terminal:cancel"] = function() core.active_view.terminal:input("\x18") end,
+  ["terminal:copy"] = function() end,
+  ["terminal:start-of-heading"] = function() core.active_view.terminal:input("\x01") end,
+  ["terminal:start-of-text"] = function() core.active_view.terminal:input("\x02") end,
+  ["terminal:enquiry"] = function() core.active_view.terminal:input("\x05") end,
+  ["terminal:acknowledge"] = function() core.active_view.terminal:input("\x06") end,
+  ["terminal:bell"] = function() core.active_view.terminal:input("\x07") end,
+  ["terminal:vertical-tab"] = function() core.active_view.terminal:input("\x0B") end,
+  ["terminal:redraw"] = function() core.active_view.terminal:input("\0C") end,
+  ["terminal:carriage-feed"] = function() core.active_view.terminal:input("\x0D") end,
+  ["terminal:shift-out"] = function() core.active_view.terminal:input("\x0E") end,
+  ["terminal:shift-in"] = function() core.active_view.terminal:input("\x0F") end,
+  ["terminal:data-line-escape"] = function() core.active_view.terminal:input("\x10") end,
+  ["terminal:stop"] = function() core.active_view.terminal:input("\x11") end,
+  ["terminal:history"] = function() core.active_view.terminal:input("\x12") end,
+  ["terminal:start"] = function() core.active_view.terminal:input("\x13") end,
+  ["terminal:transpose"] = function() core.active_view.terminal:input("\x14") end,
+  ["terminal:negative-acknowledge"] = function() core.active_view.terminal:input("\x15") end,
+  ["terminal:synchronous-idel"] = function() core.active_view.terminal:input("\x16") end,
+  ["terminal:end-of-transmission-block"] = function() core.active_view.terminal:input("\x17") end,
+  ["terminal:cancel"] = function() core.active_view.terminal:input("\x18") end,
+  ["terminal:end-of-medium"] = function() core.active_view.terminal:input("\x19") end,
+  ["terminal:file-separator"] = function() core.active_view.terminal:input("\x1C") end,
+  ["terminal:group-separator"] = function() core.active_view.terminal:input("\x1D") end
 });
+
 command.add(nil, {
   ["terminal:toggle"] = function()
     if not view then
@@ -288,14 +313,9 @@ core.status_view:add_item({
 keymap.add {
   ["return"] = "terminal:return",
   ["backspace"] = "terminal:backspace",
-  ["ctrl+h"] = "terminal:backspace",
   ["delete"] = "terminal:delete",
   ["ctrl+backspace"] = "terminal:ctrl-backspace",
   ["alt+backspace"] = "terminal:alt-backspace",
-  ["ctrl+l"] = "terminal:redraw",
-  ["ctrl+z"] = "terminal:suspend",
-  ["ctrl+c"] = "terminal:break",
-  ["ctrl+d"] = "terminal:eof",
   ["ctrl+shift+c"] = "terminal:copy",
   ["ctrl+shift+v"] = "terminal:paste",
   ["wheel"] = "terminal:scroll",
@@ -329,7 +349,36 @@ keymap.add {
   ["f11"] = "terminal:f11",
   ["f12"] = "terminal:f11",
   ["escape"] = "terminal:escape",
-  ["ctrl+t"] = "terminal:toggle"
+  ["ctrl+a"] = "terminal:start-of-heading",
+  ["ctrl+b"] = "terminal:start-of-text",
+  ["ctrl+c"] = "terminal:break",
+  ["ctrl+d"] = "terminal:eof",
+  ["ctrl+e"] = "terminal:enquriy",
+  ["ctrl+f"] = "terminal:acknowledge",
+  ["ctrl+g"] = "terminal:bell",
+  ["ctrl+h"] = "terminal:backspace",
+  ["ctrl+i"] = "terminal:tab",
+  ["ctrl+j"] = "terminal:return",
+  ["ctrl+k"] = "terminal:vertical-tab",
+  ["ctrl+l"] = "terminal:redraw",
+  ["ctrl+m"] = "terminal:carriage-feed",
+  ["ctrl+n"] = "terminal:carriage-feed",
+  ["ctrl+o"] = "terminal:shift-in",
+  ["ctrl+n"] = "terminal:shift-out",
+  ["ctrl+p"] = "terminal:data-line-escape",
+  ["ctrl+q"] = "terminal:stop",
+  ["ctrl+r"] = "terminal:history",
+  ["ctrl+s"] = "terminal:start",
+  ["ctrl+t"] = { "terminal:transpose", "terminal:toggle" },
+  ["ctrl+u"] = "terminal:negative-acknowledge",
+  ["ctrl+v"] = "terminal:synchronous-idel",
+  ["ctrl+w"] = "terminal:end-of-transmission-block",
+  ["ctrl+x"] = "terminal:cancel",
+  ["ctrl+y"] = "terminal:end-of-medium",
+  ["ctrl+z"] = "terminal:suspend",
+  ["ctrl+["] = "terminal:escape",
+  ["ctrl+\\"] = "terminal:file-separator",
+  ["ctrl+]"] = "terminal:group-separator"
 }
 
 return {
