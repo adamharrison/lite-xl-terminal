@@ -204,7 +204,7 @@ end
 
 command.add(TerminalView, {
   ["terminal:backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace) end,
-  ["terminal:ctrl-backspace"] = function() core.active_view.terminal:input("\b") end,
+  ["terminal:ctrl-backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace == "\b" and "\x7F" or "\b") end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B" .. core.active_view.options.backspace) end,
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,

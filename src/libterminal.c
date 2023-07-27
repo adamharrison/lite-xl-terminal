@@ -873,7 +873,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     struct termios term = {0};
     term.c_cc[VINTR] = 3;
     term.c_cc[VSUSP] = 26;
-    term.c_cc[VERASE] = '\b';
+    term.c_cc[VERASE] = '\x7F';
     term.c_cc[VEOL] = '\n';
     term.c_cc[VEOF] = 4;
     term.c_lflag |= ISIG | ECHO | ICANON;
