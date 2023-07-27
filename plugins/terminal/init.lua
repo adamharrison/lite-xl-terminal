@@ -204,6 +204,7 @@ end
 
 command.add(TerminalView, {
   ["terminal:backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace) end,
+  ["terminal:ctrl-backspace"] = function() core.active_view.terminal:input("\b") end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B" .. core.active_view.options.backspace) end,
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
@@ -289,6 +290,7 @@ keymap.add {
   ["backspace"] = "terminal:backspace",
   ["ctrl+h"] = "terminal:backspace",
   ["delete"] = "terminal:delete",
+  ["ctrl+backspace"] = "terminal:ctrl-backspace",
   ["alt+backspace"] = "terminal:alt-backspace",
   ["ctrl+l"] = "terminal:redraw",
   ["ctrl+z"] = "terminal:suspend",

@@ -263,10 +263,11 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   view_t* view = &terminal->views[terminal->current_view];
 
   if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
-    // fprintf(stderr, "WAT %d %d\n", view->scrolling_region_start, view->scrolling_region_end);
-    memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_end - 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start - 1));
+    memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_start + 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start));
     memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
-  } else if (terminal->current_view == VIEW_NORMAL_BUFFER) {
+    return;
+  }
+  if (terminal->current_view == VIEW_NORMAL_BUFFER) {
     if (terminal->scrollback_total_lines++ > terminal->scrollback_limit) {
       backbuffer_page_t* page = terminal->scrollback_buffer_end;
       if (page->next)
@@ -510,8 +511,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         view->cursor_x = 0;
         view->cursor_y = 0;
         if (seq[semicolon] == ';') {
-          //view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
-          //view->scrolling_region_end = parse_number(&seq[semicolon+1], 1) - 1;
+          view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
+          view->scrolling_region_end = parse_number(&seq[semicolon+1], 1);
         }
       } break;
       default: unhandled = 1; break;
