@@ -876,6 +876,8 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   #else
     struct termios term = {0};
     term.c_cc[VINTR] = 3;
+    term.c_cc[VSTART] = '\x13';
+    term.c_cc[VSTOP] = '\x11';
     term.c_cc[VSUSP] = 26;
     term.c_cc[VERASE] = '\x7F';
     term.c_cc[VEOL] = '\n';
