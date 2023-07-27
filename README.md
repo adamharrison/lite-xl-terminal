@@ -7,7 +7,7 @@
 
 ## Installation
 
-The easiest way to install `lite-xl-terminal` **will be** to use [`lpm`](https://github.com/lite-xl/lite-xl-plugin-manager), and
+The easiest way to install `lite-xl-terminal` is to use [`lpm`](https://github.com/lite-xl/lite-xl-plugin-manager), and
 then run the following command:
 
 ```
@@ -35,7 +35,7 @@ You can activate the terminal by either pressing `ctrl+t`, or running the `Termi
 
 ## Status
 
-Currently pre-release. Still has major issues. Use at your own risk. See TODO, below.
+Currently pre-release; but mostly complete. Use at your own risk.
 
 Target release date is August 1st, 2023.
 
@@ -88,6 +88,6 @@ By default, will use `$SHELL`, if present. If not, we will use `sh` on linux and
 Currently doesn't support the following (non-exhaustive list; mainly contains
 things that may be supported in future):
 
-* Setting tab stops.
-* `DECBKM`.
-
+1. Copying from terminal.
+2. Setting explicitly tab stops.
+3. `DECBKM`.
