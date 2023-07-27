@@ -52,6 +52,7 @@
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
 #define LIBTERMINAL_COLOR_NOT_SET 256
+#define LIBTERMINAL_COLOR_INVERSE 257
 #define LIBTERMINAL_DEFAULT_TAB_SIZE 8
 #define LIBTERMINAL_NO_STYLING (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }
 
@@ -449,6 +450,10 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 1  : view->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
                 case 3  : view->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
                 case 4  : view->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
+                case 7  : {
+                  view->cursor_styling.foreground = LIBTERMINAL_COLOR_INVERSE;
+                  view->cursor_styling.background = LIBTERMINAL_COLOR_INVERSE;
+                } break;
                 case 30 : view->cursor_styling.foreground = 0; break;
                 case 31 : view->cursor_styling.foreground = 1; break;
                 case 32 : view->cursor_styling.foreground = 2; break;
@@ -642,11 +647,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case 0x07:
         break;
         case '\b': {
-          if (view->cursor_x) {
+          if (view->cursor_x)
             --view->cursor_x;
-            //view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint = ' ';
-            //view->buffer[view->cursor_y * terminal->columns + view->cursor_x].styling = LIBTERMINAL_NO_STYLING;
-          }
         } break;
         case '\t': {
           view->cursor_x = (view->cursor_x + view->tab_size) - ((view->cursor_x + view->tab_size) % view->tab_size);
