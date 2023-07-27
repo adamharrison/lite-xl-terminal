@@ -90,7 +90,6 @@ typedef enum view_e {
   VIEW_MAX = 2
 } view_e;
 
-
 typedef enum cursor_mode_e {
   CURSOR_SOLID         = 0,
   CURSOR_HIDDEN        = 1,
@@ -102,11 +101,17 @@ typedef enum paste_mode_e {
   PASTE_BRACKETED
 } paste_mode_e;
 
+typedef enum crusor_keys_mode_e {
+  CURSOR_KEYS_NORMAL,
+  CURSOR_KEYS_APPLICATION
+} cursor_keys_mode_e;
+
 typedef struct view_t {
   buffer_char_t* buffer;
   int cursor_x, cursor_y;
   buffer_styling_t cursor_styling; // What characters are currently being emitted as.
-  cursor_mode_e mode;
+  cursor_mode_e cursor_mode;
+  cursor_keys_mode_e keys_mode;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
   // buffer. When applied, shifts cursor to the top, and allows you to write
@@ -281,10 +286,10 @@ static void terminal_shift_buffer(terminal_t* terminal) {
       page->line = 0;
     }
     memcpy(&terminal->scrollback_buffer_start->buffer[terminal->scrollback_buffer_start->line * terminal->columns], &view->buffer[0], sizeof(buffer_char_t) * terminal->columns);
-    memmove(&view->buffer[0], &view->buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
-    memset(&view->buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
     terminal->scrollback_buffer_start->line++;
   }
+  memmove(&view->buffer[0], &view->buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
+  memset(&view->buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
@@ -397,8 +402,9 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'h': {
         if (seq[2] == '?') {
           switch (parse_number(&seq[3], 0)) {
-            case 12: view->mode = CURSOR_BLINKING; break;
-            case 25: view->mode = CURSOR_SOLID; break;
+            case 1: view->keys_mode = CURSOR_KEYS_APPLICATION; break;
+            case 12: view->cursor_mode = CURSOR_BLINKING; break;
+            case 25: view->cursor_mode = CURSOR_SOLID; break;
             case 1004: terminal->reporting_focus = 1; break;
             case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
@@ -410,8 +416,9 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'l': {
         if (seq[2] == '?') {
           switch (parse_number(&seq[3], 0)) {
-            case 12: view->mode = CURSOR_SOLID; break;
-            case 25: view->mode = CURSOR_HIDDEN; break;
+            case 1: view->keys_mode = CURSOR_KEYS_NORMAL; break;
+            case 12: view->cursor_mode = CURSOR_SOLID; break;
+            case 25: view->cursor_mode = CURSOR_HIDDEN; break;
             case 1004: terminal->reporting_focus = 0; break;
             case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
             case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
@@ -511,6 +518,19 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   } else if (type == ESCAPE_TYPE_OS) {
     if (strlen(seq) >= 5 && seq[2] == '0' && seq[3] == ';')
       strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
+  } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
+    switch (seq[1]) {
+      case 'M':
+        if (view->cursor_y == 0) {
+          memmove(&view->buffer[terminal->columns], &view->buffer[0], sizeof(buffer_char_t)*terminal->columns*(terminal->lines-1));
+          memset(&view->buffer[0], 0, sizeof(buffer_char_t)*terminal->columns);
+        } else {
+          --view->cursor_y;
+          view->cursor_x = 0;
+        }
+      break;
+      default: unhandled = 1; break;
+    }
   }
 
   if (unhandled) {
@@ -527,6 +547,11 @@ static terminal_escape_type_e get_terminal_escape_type(char a, int* fixed_width)
   switch (a) {
     case '[': return ESCAPE_TYPE_CSI;
     case ']': return ESCAPE_TYPE_OS;
+    case 'D':
+    case 'E':
+    case 'H':
+    case 'M':
+    case 'Z':
     case 'F':
     case '>':
     case '=':
@@ -1019,12 +1044,21 @@ static int f_terminal_cursor(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_x);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_y);
-  switch (terminal->views[terminal->current_view].mode) {
+  switch (terminal->views[terminal->current_view].cursor_mode) {
     case CURSOR_SOLID: lua_pushliteral(L, "solid"); break;
     case CURSOR_HIDDEN: lua_pushliteral(L, "hidden"); break;
     case CURSOR_BLINKING: lua_pushliteral(L, "blinking"); break;
   }
   return 3;
+}
+
+static int f_terminal_keysmode(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  switch (terminal->views[terminal->current_view].keys_mode) {
+    case CURSOR_KEYS_NORMAL: lua_pushliteral(L, "normal"); break;
+    case CURSOR_KEYS_APPLICATION: lua_pushliteral(L, "application"); break;
+  }
+  return 1;
 }
 
 static int f_terminal_scrollback(lua_State* L) {
@@ -1068,6 +1102,7 @@ static const luaL_Reg terminal_api[] = {
   { "exited",        f_terminal_exited     },
   { "cursor",        f_terminal_cursor     },
   { "focused",       f_terminal_focused    },
+  { "keysmode",      f_terminal_keysmode   },
   { "pastemode",     f_terminal_pastemode  },
   { "scrollback",    f_terminal_scrollback },
   { "name",          f_terminal_name       },
