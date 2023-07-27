@@ -101,17 +101,18 @@ typedef enum paste_mode_e {
   PASTE_BRACKETED
 } paste_mode_e;
 
-typedef enum crusor_keys_mode_e {
-  CURSOR_KEYS_NORMAL,
-  CURSOR_KEYS_APPLICATION
-} cursor_keys_mode_e;
+typedef enum keys_mode_e {
+  KEYS_MODE_NORMAL,
+  KEYS_MODE_APPLICATION
+} keys_mode_e;
 
 typedef struct view_t {
   buffer_char_t* buffer;
   int cursor_x, cursor_y;
   buffer_styling_t cursor_styling; // What characters are currently being emitted as.
   cursor_mode_e cursor_mode;
-  cursor_keys_mode_e keys_mode;
+  keys_mode_e cursor_keys_mode;
+  keys_mode_e keypad_keys_mode;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
   // buffer. When applied, shifts cursor to the top, and allows you to write
@@ -402,7 +403,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'h': {
         if (seq[2] == '?') {
           switch (parse_number(&seq[3], 0)) {
-            case 1: view->keys_mode = CURSOR_KEYS_APPLICATION; break;
+            case 1: view->cursor_keys_mode = KEYS_MODE_APPLICATION; break;
             case 12: view->cursor_mode = CURSOR_BLINKING; break;
             case 25: view->cursor_mode = CURSOR_SOLID; break;
             case 1004: terminal->reporting_focus = 1; break;
@@ -416,7 +417,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'l': {
         if (seq[2] == '?') {
           switch (parse_number(&seq[3], 0)) {
-            case 1: view->keys_mode = CURSOR_KEYS_NORMAL; break;
+            case 1: view->cursor_keys_mode = KEYS_MODE_NORMAL; break;
             case 12: view->cursor_mode = CURSOR_SOLID; break;
             case 25: view->cursor_mode = CURSOR_HIDDEN; break;
             case 1004: terminal->reporting_focus = 0; break;
@@ -520,6 +521,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
     switch (seq[1]) {
+      case '=': view->keypad_keys_mode = KEYS_MODE_APPLICATION; break;
+      case '>': view->keypad_keys_mode = KEYS_MODE_NORMAL; break;
       case 'M':
         if (view->cursor_y == 0) {
           memmove(&view->buffer[terminal->columns], &view->buffer[0], sizeof(buffer_char_t)*terminal->columns*(terminal->lines-1));
@@ -1052,11 +1055,20 @@ static int f_terminal_cursor(lua_State* L) {
   return 3;
 }
 
-static int f_terminal_keysmode(lua_State* L) {
+static int f_terminal_cursor_keys_mode(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
-  switch (terminal->views[terminal->current_view].keys_mode) {
-    case CURSOR_KEYS_NORMAL: lua_pushliteral(L, "normal"); break;
-    case CURSOR_KEYS_APPLICATION: lua_pushliteral(L, "application"); break;
+  switch (terminal->views[terminal->current_view].cursor_keys_mode) {
+    case KEYS_MODE_NORMAL: lua_pushliteral(L, "normal"); break;
+    case KEYS_MODE_APPLICATION: lua_pushliteral(L, "application"); break;
+  }
+  return 1;
+}
+
+static int f_terminal_keypad_keys_mode(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  switch (terminal->views[terminal->current_view].keypad_keys_mode) {
+    case KEYS_MODE_NORMAL: lua_pushliteral(L, "normal"); break;
+    case KEYS_MODE_APPLICATION: lua_pushliteral(L, "application"); break;
   }
   return 1;
 }
@@ -1092,21 +1104,22 @@ static int f_terminal_name(lua_State* L) {
 }
 
 static const luaL_Reg terminal_api[] = {
-  { "__gc",          f_terminal_gc         },
-  { "new",           f_terminal_new        },
-  { "close",         f_terminal_close      },
-  { "input",         f_terminal_input      },
-  { "lines",         f_terminal_lines      },
-  { "size",          f_terminal_size       },
-  { "update",        f_terminal_update     },
-  { "exited",        f_terminal_exited     },
-  { "cursor",        f_terminal_cursor     },
-  { "focused",       f_terminal_focused    },
-  { "keysmode",      f_terminal_keysmode   },
-  { "pastemode",     f_terminal_pastemode  },
-  { "scrollback",    f_terminal_scrollback },
-  { "name",          f_terminal_name       },
-  { NULL,            NULL                  }
+  { "__gc",             f_terminal_gc               },
+  { "new",              f_terminal_new              },
+  { "close",            f_terminal_close            },
+  { "input",            f_terminal_input            },
+  { "lines",            f_terminal_lines            },
+  { "size",             f_terminal_size             },
+  { "update",           f_terminal_update           },
+  { "exited",           f_terminal_exited           },
+  { "cursor",           f_terminal_cursor           },
+  { "focused",          f_terminal_focused          },
+  { "cursor_keys_mode", f_terminal_cursor_keys_mode },
+  { "keypad_keys_mode", f_terminal_keypad_keys_mode },
+  { "pastemode",        f_terminal_pastemode        },
+  { "scrollback",       f_terminal_scrollback       },
+  { "name",             f_terminal_name             },
+  { NULL,               NULL                        }
 };
 
 
