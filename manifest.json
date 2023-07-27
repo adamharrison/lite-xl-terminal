@@ -2,7 +2,7 @@
   "addons": [{
     "id": "terminal",
     "description": "An integrated terminal for lite-xl.",
-    "version": "0.3",
+    "version": "0.4",
     "path": "plugins/terminal",
     "files": [{
       "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/latest/libterminal.x86_64-linux.so",
