@@ -644,8 +644,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case '\b': {
           if (view->cursor_x) {
             --view->cursor_x;
-            view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint = ' ';
-            view->buffer[view->cursor_y * terminal->columns + view->cursor_x].styling = LIBTERMINAL_NO_STYLING;
+            //view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint = ' ';
+            //view->buffer[view->cursor_y * terminal->columns + view->cursor_x].styling = LIBTERMINAL_NO_STYLING;
           }
         } break;
         case '\t': {
