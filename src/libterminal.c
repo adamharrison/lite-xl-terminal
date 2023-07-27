@@ -269,14 +269,14 @@ static void terminal_shift_buffer(terminal_t* terminal) {
       terminal->scrollback_total_lines -= page->line;
       free(page);
     }
-    if (!terminal->scrollback_buffer_start || terminal->scrollback_buffer_start->columns != terminal->columns || terminal->scrollback_buffer_start->lines != terminal->lines || terminal->scrollback_buffer_start->line >= terminal->scrollback_buffer_start->lines) {
+    if (!terminal->scrollback_buffer_start || terminal->scrollback_buffer_start->columns != terminal->columns || terminal->scrollback_buffer_start->line >= terminal->scrollback_buffer_start->lines) {
       backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
       backbuffer_page_t* prev = terminal->scrollback_buffer_start;
       page->prev = prev;
       if (prev)
         prev->next = page;
       terminal->scrollback_buffer_start = page;
-      page->lines = terminal->lines;
+      page->lines = LIBTERMINAL_BACKBUFFER_PAGE_LINES;
       page->columns = terminal->columns;
       page->line = 0;
     }
@@ -761,6 +761,8 @@ static void terminal_free(terminal_t* terminal) {
 }
 
 static void terminal_resize(terminal_t* terminal, int columns, int lines) {
+  if (terminal->columns == columns && terminal->lines == lines)
+    return;
   #ifdef _WIN32
     COORD size = { columns, lines };
     ResizePseudoConsole(terminal->hpcon, size);
@@ -772,6 +774,10 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
     buffer_char_t* buffer = malloc(sizeof(buffer_char_t) * columns * lines);
     memset(buffer, 0, sizeof(buffer_char_t) * columns * lines);
     if (terminal->views[i].buffer) {
+      if (lines < terminal->lines && i == VIEW_NORMAL_BUFFER) {
+        for (int j = 0; j < max(0, (terminal->views[i].cursor_y+1) - lines); ++j)
+          terminal_shift_buffer(terminal);
+      }
       int max_lines = min(terminal->lines, lines);
       for (int y = 0; y < max_lines; ++y)
         memcpy(&buffer[y*columns], &terminal->views[i].buffer[y*terminal->columns], min(terminal->columns, columns)*sizeof(buffer_char_t));

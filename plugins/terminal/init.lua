@@ -284,6 +284,7 @@ core.status_view:add_item({
 keymap.add {
   ["return"] = "terminal:return",
   ["backspace"] = "terminal:backspace",
+  ["ctrl+h"] = "terminal:backspace",
   ["delete"] = "terminal:delete",
   ["alt+backspace"] = "terminal:alt-backspace",
   ["ctrl+l"] = "terminal:redraw",
