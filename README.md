@@ -78,10 +78,16 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 7. Copying from terminal.
 8. UTF-8 support.
 9. Terminal resizing.
+10. Locked scrollback regions.
 
 By default, will use `$SHELL`, if present. If not, we will use `sh` on linux and mac
 (though this is configurable), and `c:\windows\system32\cmd.exe` on windows.
 
-## TODO
+## Limitations
 
-* Ensure that locked scrollback regions work correctly. (Hard)
+Currently doesn't support the following (non-exhaustive list; mainly contains
+things that may be supported in future):
+
+* Setting tab stops.
+* `DECBKM`.
+
