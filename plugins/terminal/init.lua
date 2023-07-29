@@ -239,9 +239,9 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
           local last_space = 0
           local idx = text:reverse():find("%s", #text - col)
           if idx then
-            last_space = (#text - idx)
+            last_space = (#text - idx) + 1
           end
-          self.selection = { last_space + 1, row, next_space - 1, row }
+          self.selection = { last_space, row, next_space - 1, row }
         end
       end
     elseif clicks == 3 then
