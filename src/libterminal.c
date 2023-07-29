@@ -490,6 +490,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 105: view->cursor_styling.background = 201; break;
                 case 106: view->cursor_styling.background = 51; break;
                 case 107: view->cursor_styling.background = 231; break;
+                default: unhandled = 1; break;
               }
             break;
             case DISPLAY_STATE_FOREGROUND_COLOR_MODE: state = DISPLAY_STATE_FOREGROUND_COLOR_VALUE; break;

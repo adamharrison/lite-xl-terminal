@@ -79,6 +79,7 @@ A simple, and straightforward terminal that presents itself as `xterm-256color`.
 8. UTF-8 support.
 9. Terminal resizing.
 10. Locked scrollback regions.
+11. Copying from terminal.
 
 By default, will use `$SHELL`, if present. If not, we will use `sh` on linux and mac
 (though this is configurable), and `c:\windows\system32\cmd.exe` on windows.
@@ -88,6 +89,5 @@ By default, will use `$SHELL`, if present. If not, we will use `sh` on linux and
 Currently doesn't support the following (non-exhaustive list; mainly contains
 things that may be supported in future):
 
-1. Copying from terminal.
 2. Setting explicitly tab stops.
 3. `DECBKM`.

@@ -100,8 +100,8 @@ end
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
-    self.columns = math.floor((self.size.x - style.padding.x*2) / style.code_font:get_width("W"))
-    self.lines = math.floor((self.size.y - style.padding.y*2) / style.code_font:get_height())
+    self.columns = math.floor((self.size.x - style.padding.x*2) / self.options.font:get_width("W"))
+    self.lines = math.floor((self.size.y - style.padding.y*2) / self.options.font:get_height())
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
@@ -152,16 +152,16 @@ function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
     local cursor_x, cursor_y, mode = self.terminal:cursor()
-    local space_width = style.code_font:get_width(" ")
+    local space_width = self.options.font:get_width(" ")
 
     local y = self.position.y + style.padding.y
-    local lh = style.code_font:get_height()
+    local lh = self.options.font:get_height()
     local should_redraw = self.terminal:update()
     if should_redraw then core.redraw = true end
-    for i, line in ipairs(self.terminal:lines()) do
+    for line_idx, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + style.padding.x
       local should_draw_cursor = false
-      if mode ~= "hidden" and core.active_view == self and i - 1 == cursor_y and self.terminal:scrollback() == 0 then
+      if mode ~= "hidden" and core.active_view == self and line_idx - 1 == cursor_y and self.terminal:scrollback() == 0 then
         if mode == "blinking" then
           local T = config.blink_period
           if (core.blink_timer - core.blink_start) % T < T / 2 then
@@ -177,13 +177,39 @@ function TerminalView:draw()
         local foreground, background = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx]), background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
         local text = line[i+1]
         local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
+        local width = font:get_width(text)
         if background then
-          renderer.draw_rect(x, y, font:get_width(text), lh, background)
+          renderer.draw_rect(x, y, width, lh, background)
         end
+        x = x + width
+      end
+      x = self.position.x + style.padding.x
+      if should_draw_cursor then
+        renderer.draw_rect(x + cursor_x * space_width, y, space_width, lh, style.accent)
+      end
+      local idx = line_idx - 1
+      if self.selection then
+        local terminal_width = self.size.x - style.padding.x * 2
+        local sorted = { table.unpack(self.selection) }
+        if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
+          sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
+        end
+        if idx == sorted[2] and idx == sorted[4] then
+          renderer.draw_rect(x + sorted[1] * space_width, y, (sorted[3] - sorted[1]) * space_width, lh, style.accent)
+        elseif idx == sorted[2] then
+          renderer.draw_rect(x + sorted[1] * space_width, y, terminal_width - (sorted[1] * space_width), lh, style.accent)
+        elseif idx > sorted[2] and idx < sorted[4] then
+          renderer.draw_rect(x, y, terminal_width, lh, style.accent)
+        elseif idx == sorted[4] then
+          renderer.draw_rect(x, y, space_width * sorted[3], lh, style.accent)
+        end
+      end
+      for i = 1, #line, 2 do
+        local foreground_idx, background_idx, style_idx = ((line[i] >> 17) & 0x1FF), ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
+        local foreground, background = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx]), background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
+        local text = line[i+1]
+        local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local length = text:ulen()
-        if should_draw_cursor and cursor_x >= offset and cursor_x < offset + length then
-          renderer.draw_rect(x + space_width * (cursor_x - offset), y, space_width, lh, style.accent)
-        end
         x = renderer.draw_text(font, text, x, y, foreground or self.options.text)
         offset = offset + length
       end
@@ -192,6 +218,53 @@ function TerminalView:draw()
   end
 end
 
+function TerminalView:convert_coordinates(x, y)
+  return math.max(math.floor((x - self.position.x - style.padding.x) / self.options.font:get_width(" ")), 0), math.max(math.floor((y - self.position.y - style.padding.y) / self.options.font:get_height()), 0)
+end
+
+function TerminalView:on_mouse_pressed(button, x, y, clicks)
+  if button == "left" then
+    if clicks == 1 then
+      self.selection = nil
+      self.pressing = true
+    elseif clicks == 2 then
+      local col, row = self:convert_coordinates(x, y)
+      for line_idx, line in ipairs(self.terminal:lines()) do
+        if line_idx == row + 1 then
+          local text = ""
+          for i = 1, #line, 2 do
+            text = text .. line[i+1]
+          end
+          local next_space = text:find("%s", col) or #text
+          local last_space = 0
+          local idx = text:reverse():find("%s", #text - col)
+          if idx then
+            last_space = (#text - idx)
+          end
+          self.selection = { last_space + 1, row, next_space - 1, row }
+        end
+      end
+    elseif clicks == 3 then
+      local col, line = self:convert_coordinates(x, y)
+      self.selection = { 0, line, 0, line + 1 }
+    end
+  end
+end
+
+function TerminalView:on_mouse_moved(x, y)
+  if self.pressing then
+    local col, line = self:convert_coordinates(x, y)
+    if not self.selection then self.selection = { col, line } end
+    self.selection[3] = col
+    self.selection[4] = line
+  end
+end
+
+function TerminalView:on_mouse_released(button)
+  if button == "left" then
+    self.pressing = false
+  end
+end
 
 function TerminalView:on_text_input(text)
   if self.terminal then
@@ -223,7 +296,7 @@ command.add(TerminalView, {
     end
   end,
   ["terminal:page-up"] = function() core.active_view.terminal:input("\x1B[5~") end,
-  ["terminal:page-down"] = function() core.active_view.terminal:input("\x1B[6~") end,
+    ["terminal:page-down"] = function() core.active_view.terminal:input("\x1B[6~") end,
   ["terminal:scroll-up"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() + core.active_view.lines) end,
   ["terminal:scroll-down"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() - core.active_view.lines) end,
   ["terminal:scroll-to-end"] = function() view.terminal:scrollback(0) end,
@@ -252,7 +325,6 @@ command.add(TerminalView, {
   ["terminal:start"] = function() core.active_view.terminal:input("\x13") end,
   ["terminal:stop"] = function() core.active_view.terminal:input("\x11") end,
   ["terminal:cancel"] = function() core.active_view.terminal:input("\x18") end,
-  ["terminal:copy"] = function() end,
   ["terminal:start-of-heading"] = function() core.active_view.terminal:input("\x01") end,
   ["terminal:start-of-text"] = function() core.active_view.terminal:input("\x02") end,
   ["terminal:enquiry"] = function() core.active_view.terminal:input("\x05") end,
@@ -273,6 +345,54 @@ command.add(TerminalView, {
   ["terminal:file-separator"] = function() core.active_view.terminal:input("\x1C") end,
   ["terminal:group-separator"] = function() core.active_view.terminal:input("\x1D") end
 });
+
+command.add(function()
+  return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
+end, {
+  ["terminal:copy"] = function()
+    local tv = core.active_view
+    local full_buffer = {}
+    for line_idx, line in ipairs(tv.terminal:lines()) do
+      local idx = line_idx - 1
+      local sorted = { table.unpack(tv.selection) }
+      if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
+        sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
+      end
+      if idx >= sorted[2] or idx <= sorted[4] then
+        local offset = 0
+        for i = 1, #line, 2 do
+          local text = line[i + 1]
+          local length = text:ulen()
+          if idx == sorted[2] and idx == sorted[4] then
+            if offset + length >= sorted[1] and offset <= sorted[3] then
+              local s = math.max(sorted[1] - offset, 0) + 1
+              local e = math.min(sorted[3] - offset, length)
+              table.insert(full_buffer, text:sub(s, e))
+            end
+          elseif idx == sorted[2] then
+            if offset + length >= sorted[1] then
+              local s = math.max(sorted[1] - offset, 0) + 1
+              table.insert(full_buffer, text:sub(s, length))
+            end
+          elseif idx > sorted[2] and idx < sorted[4] then
+            table.insert(full_buffer, text)
+          elseif idx == sorted[4] then
+            if offset <= sorted[3] then
+              local e = math.min(sorted[3] - offset, length)
+              table.insert(full_buffer, text:sub(1, e))
+            end
+          end
+          offset = offset + length
+        end
+        if idx < sorted[4] then
+          table.insert(full_buffer, "\n")
+        end
+      end
+    end
+    local text = table.concat(full_buffer)
+    system.set_clipboard(text)
+  end
+})
 
 command.add(nil, {
   ["terminal:toggle"] = function()
