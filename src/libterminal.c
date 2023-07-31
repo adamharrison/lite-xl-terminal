@@ -115,6 +115,12 @@ typedef enum mouse_tracking_mode_e {
   MOUSE_TRACKING_SGR
 } mouse_tracking_mode_e;
 
+typedef enum charset_e {
+  CHARSET_US,
+  CHARSET_DEC,
+  CHARSET_OTHER
+} charset_e;
+
 typedef struct view_t {
   buffer_char_t* buffer;
   int cursor_x, cursor_y;
@@ -123,6 +129,7 @@ typedef struct view_t {
   keys_mode_e cursor_keys_mode;
   keys_mode_e keypad_keys_mode;
   mouse_tracking_mode_e mouse_tracking_mode;
+  charset_e charset;
   int tab_size;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
@@ -537,7 +544,6 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case DISPLAY_STATE_COLOR_VALUE_G: g = ((parse_number(&seq[offset], 0) & 0xFF) * 6) / 256; state = DISPLAY_STATE_COLOR_VALUE_B; break;
             case DISPLAY_STATE_COLOR_VALUE_B: {
               b = ((parse_number(&seq[offset], 0) & 0xFF) * 6) / 256;
-              fprintf(stderr, "SET: %d %d %d\n", r, g, b);
               if (foreground)
                 view->cursor_styling.foreground = 16 + 36 * r + 6 * g + b;
               else
@@ -577,7 +583,13 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
     switch (seq[1]) {
-      case '(': break; // Sets character set; ignored because we only work with UTF-8.
+      case '(':
+        switch (seq[2]) {
+          case '0': view->charset = CHARSET_DEC; break;
+          case 'B': view->charset = CHARSET_US; break;
+          default: view->charset = CHARSET_OTHER; break;
+        }
+      break;
       case '=': view->keypad_keys_mode = KEYS_MODE_APPLICATION; break;
       case '>': view->keypad_keys_mode = KEYS_MODE_NORMAL; break;
       case 'M':
@@ -646,6 +658,45 @@ static terminal_escape_type_e parse_partial_sequence(const char* seq, int len, i
   if (len == 1)
     return ESCAPE_TYPE_OPEN;
   return get_terminal_escape_type(seq[1], fixed_width);
+}
+
+static int translate_charset(charset_e charset, int codepoint) {
+  if (charset == CHARSET_DEC) {
+    switch (codepoint) {
+      case 0x5F: codepoint = ' '; break;
+      case 0x60: codepoint = 0x25C6; break;
+      case 0x61: codepoint = 0x2592; break;
+      case 0x62: codepoint = '\t'; break;
+      case 0x63: codepoint = '\f'; break;
+      case 0x64: codepoint = '\r'; break;
+      case 0x65: codepoint = '\n'; break;
+      case 0x66: codepoint = 0xB0; break;
+      case 0x67: codepoint = 0xB1; break;
+      case 0x68: codepoint = '\n'; break;
+      case 0x69: codepoint = '\v'; break;
+      case 0x6A: codepoint = 0x2518; break;
+      case 0x6B: codepoint = 0x2510; break;
+      case 0x6C: codepoint = 0x250C; break;
+      case 0x6D: codepoint = 0x2514; break;
+      case 0x6E: codepoint = 0x253C; break;
+      case 0x70: codepoint = 0x23BB; break;
+      case 0x71: codepoint = 0x2500; break;
+      case 0x72: codepoint = 0x23BC; break;
+      case 0x73: codepoint = 0x23BD; break;
+      case 0x74: codepoint = 0x251C; break;
+      case 0x75: codepoint = 0x2524; break;
+      case 0x76: codepoint = 0x2534; break;
+      case 0x77: codepoint = 0x252C; break;
+      case 0x78: codepoint = 0x2502; break;
+      case 0x79: codepoint = 0x2264; break;
+      case 0x7A: codepoint = 0x2265; break;
+      case 0x7B: codepoint = 0x03C0; break;
+      case 0x7C: codepoint = 0x2260; break;
+      case 0x7D: codepoint = 0x00A3; break;
+      case 0x7E: codepoint = 0x00B7; break;
+    }
+  }
+  return codepoint;
 }
 
 static void terminal_output(terminal_t* terminal, const char* str, int len) {
@@ -748,7 +799,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             else
               terminal_shift_buffer(terminal);
           }
-          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
+          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, translate_charset(view->charset, codepoint) };
           view->cursor_x++;
         break;
       }
