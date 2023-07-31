@@ -23,6 +23,7 @@ config.plugins.terminal = common.merge({
   scrollback_limit = 10000,
   height = 300,
   font = style.code_font,
+  padding = { x = 0, y = 0 },
   background = { common.color "#000000" },
   text = { common.color "#FFFFFF" },
   colors = {
@@ -100,8 +101,8 @@ end
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
-    self.columns = math.max(math.floor((self.size.x - style.padding.x*2) / self.options.font:get_width("W")), 1)
-    self.lines = math.max(math.floor((self.size.y - style.padding.y*2) / self.options.font:get_height()), 1)
+    self.columns = math.max(math.floor((self.size.x - self.options.padding.x*2) / self.options.font:get_width("W")), 1)
+    self.lines = math.max(math.floor((self.size.y - self.options.padding.y*2) / self.options.font:get_height()), 1)
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
@@ -154,12 +155,12 @@ function TerminalView:draw()
     local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = self.options.font:get_width(" ")
 
-    local y = self.position.y + style.padding.y
+    local y = self.position.y + self.options.padding.y
     local lh = self.options.font:get_height()
     local should_redraw = self.terminal:update()
     if should_redraw then core.redraw = true end
     for line_idx, line in ipairs(self.terminal:lines()) do
-      local x = self.position.x + style.padding.x
+      local x = self.position.x + self.options.padding.x
       local should_draw_cursor = false
       if mode ~= "hidden" and core.active_view == self and line_idx - 1 == cursor_y and self.terminal:scrollback() == 0 then
         if mode == "blinking" then
@@ -183,13 +184,13 @@ function TerminalView:draw()
         end
         x = x + width
       end
-      x = self.position.x + style.padding.x
+      x = self.position.x + self.options.padding.x
       if should_draw_cursor then
         renderer.draw_rect(x + cursor_x * space_width, y, space_width, lh, style.accent)
       end
       local idx = line_idx - 1
       if self.selection then
-        local terminal_width = self.size.x - style.padding.x * 2
+        local terminal_width = self.size.x - self.options.padding.x * 2
         local sorted = { table.unpack(self.selection) }
         if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
           sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
@@ -219,7 +220,7 @@ function TerminalView:draw()
 end
 
 function TerminalView:convert_coordinates(x, y)
-  return math.max(math.floor((x - self.position.x - style.padding.x) / self.options.font:get_width(" ")), 0), math.max(math.floor((y - self.position.y - style.padding.y) / self.options.font:get_height()), 0)
+  return math.max(math.floor((x - self.position.x - self.options.padding.x) / self.options.font:get_width(" ")), 0), math.max(math.floor((y - self.position.y - self.options.padding.y) / self.options.font:get_height()), 0)
 end
 
 function TerminalView:on_mouse_pressed(button, x, y, clicks)
@@ -297,7 +298,7 @@ command.add(TerminalView, {
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B" .. core.active_view.options.backspace) end,
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
-  ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.options.newline) end,
+  ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOM" or core.active_view.options.newline) end,
   ["terminal:scroll"] = function(cmd, amount)
     local tv = core.active_view
     if tv.terminal:mouse_tracking_mode() then

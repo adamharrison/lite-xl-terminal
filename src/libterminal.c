@@ -555,6 +555,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
     switch (seq[1]) {
+      case '(': break; // Sets character set; ignored because we only work with UTF-8.
       case '=': view->keypad_keys_mode = KEYS_MODE_APPLICATION; break;
       case '>': view->keypad_keys_mode = KEYS_MODE_NORMAL; break;
       case 'M':
