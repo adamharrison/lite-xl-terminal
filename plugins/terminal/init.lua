@@ -225,32 +225,35 @@ end
 function TerminalView:on_mouse_pressed(button, x, y, clicks)
   if button == "left" then
     local col, row = self:convert_coordinates(x, y)
-    if clicks == 1 then
-      self.selection = nil
-      self.pressing = true
-      if self.terminal:mouse_tracking_mode() == "x10" then
-        self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-      elseif self.terminal:mouse_tracking_mode() == "normal" then
-        self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-      end
-    elseif clicks == 2 then
-      for line_idx, line in ipairs(self.terminal:lines()) do
-        if line_idx == row + 1 then
-          local text = ""
-          for i = 1, #line, 2 do
-            text = text .. line[i+1]
+    if self.terminal:mouse_tracking_mode() == "x10" then
+      self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+    elseif self.terminal:mouse_tracking_mode() == "normal" then
+      self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+    elseif self.terminal:mouse_tracking_mode() == "sgr" then
+      self.terminal:input("\x1B[<0;" .. (col+1) .. ";" .. (row+1) .. "M" )
+    else
+      if clicks == 1 then
+        self.selection = nil
+        self.pressing = true
+      elseif clicks == 2 then
+        for line_idx, line in ipairs(self.terminal:lines()) do
+          if line_idx == row + 1 then
+            local text = ""
+            for i = 1, #line, 2 do
+              text = text .. line[i+1]
+            end
+            local next_space = text:find("%s", col) or #text
+            local last_space = 0
+            local idx = text:reverse():find("%s", #text - col)
+            if idx then
+              last_space = (#text - idx) + 1
+            end
+            self.selection = { last_space, row, next_space - 1, row }
           end
-          local next_space = text:find("%s", col) or #text
-          local last_space = 0
-          local idx = text:reverse():find("%s", #text - col)
-          if idx then
-            last_space = (#text - idx) + 1
-          end
-          self.selection = { last_space, row, next_space - 1, row }
         end
+      elseif clicks == 3 then
+        self.selection = { 0, row, 0, row + 1 }
       end
-    elseif clicks == 3 then
-      self.selection = { 0, row, 0, row + 1 }
     end
   end
 end
@@ -270,6 +273,8 @@ function TerminalView:on_mouse_released(button, x, y)
     local col, row = self:convert_coordinates(x, y)
     if self.terminal:mouse_tracking_mode() == "normal" then
       self.terminal:input("\x1B[M" .. string.char(32 + 3) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+    elseif self.terminal:mouse_tracking_mode() == "sgr" then
+      self.terminal:input("\x1B[<0;" .. (col+1) .. ";" .. (row+1) .. "m")
     end
   end
 end

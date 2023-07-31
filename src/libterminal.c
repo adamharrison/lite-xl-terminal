@@ -111,7 +111,8 @@ typedef enum keys_mode_e {
 typedef enum mouse_tracking_mode_e {
   MOUSE_TRACKING_NONE,
   MOUSE_TRACKING_X10,
-  MOUSE_TRACKING_NORMAL
+  MOUSE_TRACKING_NORMAL,
+  MOUSE_TRACKING_SGR
 } mouse_tracking_mode_e;
 
 typedef struct view_t {
@@ -421,7 +422,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
               case 9: view->mouse_tracking_mode = MOUSE_TRACKING_X10; break;
               case 12: view->cursor_mode = CURSOR_BLINKING; break;
               case 25: view->cursor_mode = CURSOR_SOLID; break;
-              case 1000: view->mouse_tracking_mode = MOUSE_TRACKING_NORMAL; break;
+              case 1000: if (view->mouse_tracking_mode != MOUSE_TRACKING_SGR) view->mouse_tracking_mode = MOUSE_TRACKING_NORMAL; break;
+              case 1006: view->mouse_tracking_mode = MOUSE_TRACKING_SGR; break;
               case 1004: terminal->reporting_focus = 1; break;
               case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
               case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
@@ -443,6 +445,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
               case 12: view->cursor_mode = CURSOR_SOLID; break;
               case 25: view->cursor_mode = CURSOR_HIDDEN; break;
               case 1000: view->mouse_tracking_mode = MOUSE_TRACKING_NONE; break;
+              case 1006: view->mouse_tracking_mode = MOUSE_TRACKING_NONE; break;
               case 1004: terminal->reporting_focus = 0; break;
               case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
               case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
@@ -1143,6 +1146,7 @@ static int f_terminal_mouse_tracking_mode(lua_State* L) {
     case MOUSE_TRACKING_NONE: lua_pushnil(L); break;
     case MOUSE_TRACKING_X10: lua_pushliteral(L, "x10"); break;
     case MOUSE_TRACKING_NORMAL: lua_pushliteral(L, "normal"); break;
+    case MOUSE_TRACKING_SGR: lua_pushliteral(L, "sgr"); break;
   }
   return 1;
 }
