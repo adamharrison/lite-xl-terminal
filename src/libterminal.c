@@ -461,12 +461,15 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         int offset = 2;
         enum DisplayState {
           DISPLAY_STATE_NONE,
-          DISPLAY_STATE_FOREGROUND_COLOR_MODE,
-          DISPLAY_STATE_FOREGROUND_COLOR_VALUE,
-          DISPLAY_STATE_BACKGROUND_COLOR_MODE,
-          DISPLAY_STATE_BACKGROUND_COLOR_VALUE,
+          DISPLAY_STATE_COLOR_MODE,
+          DISPLAY_STATE_COLOR_VALUE_IDX,
+          DISPLAY_STATE_COLOR_VALUE_R,
+          DISPLAY_STATE_COLOR_VALUE_G,
+          DISPLAY_STATE_COLOR_VALUE_B
         };
         enum DisplayState state = DISPLAY_STATE_NONE;
+        int r = 0,g = 0,b = 0;
+        int foreground = 0;
         while (1) {
           switch (state) {
             case DISPLAY_STATE_NONE:
@@ -487,7 +490,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 35 : view->cursor_styling.foreground = 5; break;
                 case 36 : view->cursor_styling.foreground = 6; break;
                 case 37 : view->cursor_styling.foreground = 7; break;
-                case 38 : state = DISPLAY_STATE_FOREGROUND_COLOR_MODE; break;
+                case 38 : state = DISPLAY_STATE_COLOR_MODE; foreground = 1; break;
                 case 39 : view->cursor_styling.foreground = LIBTERMINAL_COLOR_NOT_SET; break;
                 case 40 : view->cursor_styling.background = 0; break;
                 case 41 : view->cursor_styling.background = 1; break;
@@ -497,7 +500,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 45 : view->cursor_styling.background = 5; break;
                 case 46 : view->cursor_styling.background = 6; break;
                 case 47 : view->cursor_styling.background = 7; break;
-                case 48 : state = DISPLAY_STATE_BACKGROUND_COLOR_MODE; break;
+                case 48 : state = DISPLAY_STATE_COLOR_MODE; foreground = 0; break;
                 case 49 : view->cursor_styling.background = LIBTERMINAL_COLOR_NOT_SET; break;
                 case 90 : view->cursor_styling.foreground = 251; break;
                 case 91 : view->cursor_styling.foreground = 160; break;
@@ -518,10 +521,25 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 default: unhandled = 1; break;
               }
             break;
-            case DISPLAY_STATE_FOREGROUND_COLOR_MODE: state = DISPLAY_STATE_FOREGROUND_COLOR_VALUE; break;
-            case DISPLAY_STATE_BACKGROUND_COLOR_MODE: state = DISPLAY_STATE_BACKGROUND_COLOR_VALUE; break;
-            case DISPLAY_STATE_FOREGROUND_COLOR_VALUE: view->cursor_styling.foreground = parse_number(&seq[offset], 0); break;
-            case DISPLAY_STATE_BACKGROUND_COLOR_VALUE: view->cursor_styling.background = parse_number(&seq[offset], 0); break;
+            case DISPLAY_STATE_COLOR_MODE: state = parse_number(&seq[offset], 0) != 5 ? DISPLAY_STATE_COLOR_VALUE_R : DISPLAY_STATE_COLOR_VALUE_IDX; break;
+            case DISPLAY_STATE_COLOR_VALUE_IDX:
+              if (foreground)
+                view->cursor_styling.foreground = parse_number(&seq[offset], 0);
+              else
+                view->cursor_styling.background = parse_number(&seq[offset], 0);
+              state = DISPLAY_STATE_NONE;
+            break;
+            case DISPLAY_STATE_COLOR_VALUE_R: r = ((parse_number(&seq[offset], 0) & 0xFF) * 6) / 256; state = DISPLAY_STATE_COLOR_VALUE_G; break;
+            case DISPLAY_STATE_COLOR_VALUE_G: g = ((parse_number(&seq[offset], 0) & 0xFF) * 6) / 256; state = DISPLAY_STATE_COLOR_VALUE_B; break;
+            case DISPLAY_STATE_COLOR_VALUE_B: {
+              b = ((parse_number(&seq[offset], 0) & 0xFF) * 6) / 256;
+              fprintf(stderr, "SET: %d %d %d\n", r, g, b);
+              if (foreground)
+                view->cursor_styling.foreground = 16 + 36 * r + 6 * g + b;
+              else
+                view->cursor_styling.background = 16 + 36 * r + 6 * g + b;
+              state = DISPLAY_STATE_NONE;
+            } break;
           }
           char* next = strchr(&seq[offset], ';');
           if (!next)
