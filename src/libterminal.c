@@ -40,12 +40,8 @@
   #include <lite_xl_plugin_api.h>
 #endif
 
-#ifndef min
-  #define min(x, y) ((x) < (y) ? (x) : (y))
-#endif
-#ifndef max
-  #define max(x, y) ((x) > (y) ? (x) : (y))
-#endif
+static int min(int a, int b) { return a < b ? a : b; }
+static int max(int a, int b) { return a > b ? a : b; }
 
 #define LIBTERMINAL_BACKBUFFER_PAGE_LINES 200
 #define LIBTERMINAL_CHUNK_SIZE 4096
@@ -285,7 +281,8 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     int start = min(view->scrolling_region_start, terminal->lines - 1);
     int start_plus_1 = min((view->scrolling_region_start + 1), terminal->lines - 1);
     int end = min(view->scrolling_region_end, terminal->lines - 1);
-    memmove(&view->buffer[terminal->columns * start], &view->buffer[terminal->columns * start_plus_1], sizeof(buffer_char_t) * terminal->columns * (end - start));
+    if (start_plus_1 != start)
+      memmove(&view->buffer[terminal->columns * start], &view->buffer[terminal->columns * start_plus_1], sizeof(buffer_char_t) * terminal->columns * (end - start));
     memset(&view->buffer[terminal->columns * max(end - 1 , 0)], 0, sizeof(buffer_char_t) * terminal->columns);
     return;
   }
@@ -373,7 +370,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_y = 0;
         } else {
           view->cursor_y = max(min(parse_number(&seq[2], 1) - 1, terminal->lines - 1), 0);
-          view->cursor_x = max(min(parse_number(&seq[semicolon+1], 1) - 1, terminal->columns), 0);
+          view->cursor_x = max(min(parse_number(&seq[semicolon+1], 1) - 1, terminal->columns - 1), 0);
         }
       } break;
       case 'J':  {
@@ -573,8 +570,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         view->cursor_x = 0;
         view->cursor_y = 0;
         if (seq[semicolon] == ';') {
-          view->scrolling_region_start = parse_number(&seq[2], 1) - 1;
-          view->scrolling_region_end = parse_number(&seq[semicolon+1], 1);
+          view->scrolling_region_start = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1);
+          view->scrolling_region_end = min(max(parse_number(&seq[semicolon+1], 1), 0), terminal->lines - 1);
         }
       } break;
       default: unhandled = 1; break;
@@ -923,6 +920,10 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
     terminal->views[i].buffer = buffer;
     terminal->views[i].cursor_x = min(terminal->views[i].cursor_x, columns - 1);
     terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, lines - 1);
+    if (terminal->views[i].scrolling_region_end != -1 || terminal->views[i].scrolling_region_end != -1) {
+      terminal->views[i].scrolling_region_start = min(terminal->views[i].scrolling_region_start, lines - 1);
+      terminal->views[i].scrolling_region_end = min(terminal->views[i].scrolling_region_end, lines - 1);
+    }
   }
   terminal->columns = columns;
   terminal->lines = lines;
