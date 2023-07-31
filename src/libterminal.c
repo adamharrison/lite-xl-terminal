@@ -274,8 +274,12 @@ static void terminal_shift_buffer(terminal_t* terminal) {
   view_t* view = &terminal->views[terminal->current_view];
 
   if (view->scrolling_region_start != -1 && view->scrolling_region_end != -1) {
-    memmove(&view->buffer[terminal->columns * view->scrolling_region_start], &view->buffer[terminal->columns * (view->scrolling_region_start + 1)], sizeof(buffer_char_t) * terminal->columns * (view->scrolling_region_end - view->scrolling_region_start));
-    memset(&view->buffer[terminal->columns * (view->scrolling_region_end - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+    // We perform this song and dance in case of Guldoman levels of resizing.
+    int start = min(view->scrolling_region_start, terminal->lines - 1);
+    int start_plus_1 = min((view->scrolling_region_start + 1), terminal->lines - 1);
+    int end = min(view->scrolling_region_end, terminal->lines - 1);
+    memmove(&view->buffer[terminal->columns * start], &view->buffer[terminal->columns * start_plus_1], sizeof(buffer_char_t) * terminal->columns * (end - start));
+    memset(&view->buffer[terminal->columns * max(end - 1 , 0)], 0, sizeof(buffer_char_t) * terminal->columns);
     return;
   }
   if (terminal->current_view == VIEW_NORMAL_BUFFER) {
