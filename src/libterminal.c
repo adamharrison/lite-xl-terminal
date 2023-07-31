@@ -364,6 +364,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'E': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); view->cursor_x = 0; break;
       case 'F': view->cursor_y = min(view->cursor_y - parse_number(&seq[2], 1), 0); view->cursor_x = 0; break;
       case 'G': view->cursor_x = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->columns - 1); break;
+      case 'f':
       case 'H': {
         int semicolon = -1;
         for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
