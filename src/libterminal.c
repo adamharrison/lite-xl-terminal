@@ -108,6 +108,12 @@ typedef enum keys_mode_e {
   KEYS_MODE_APPLICATION
 } keys_mode_e;
 
+typedef enum mouse_tracking_mode_e {
+  MOUSE_TRACKING_NONE,
+  MOUSE_TRACKING_X10,
+  MOUSE_TRACKING_NORMAL
+} mouse_tracking_mode_e;
+
 typedef struct view_t {
   buffer_char_t* buffer;
   int cursor_x, cursor_y;
@@ -115,6 +121,7 @@ typedef struct view_t {
   cursor_mode_e cursor_mode;
   keys_mode_e cursor_keys_mode;
   keys_mode_e keypad_keys_mode;
+  mouse_tracking_mode_e mouse_tracking_mode;
   int tab_size;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
@@ -344,7 +351,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'D': view->cursor_x = max(view->cursor_x - parse_number(&seq[2], 1), 0); break;
       case 'E': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); view->cursor_x = 0; break;
       case 'F': view->cursor_y = min(view->cursor_y - parse_number(&seq[2], 1), 0); view->cursor_x = 0; break;
-      case 'G': view->cursor_x = parse_number(&seq[2], 1); break;
+      case 'G': view->cursor_x = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->columns - 1); break;
       case 'H': {
         int semicolon = -1;
         for (semicolon = 2; semicolon < seq_end && seq[semicolon] != ';'; ++semicolon);
@@ -381,13 +388,14 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         }
       } break;
       case 'K': {
+        int s, e;
         switch (seq[2]) {
-          case '1': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * view->cursor_x);     break;
-          case '2': memset(&view->buffer[view->cursor_y * terminal->columns], 0, sizeof(buffer_char_t) * terminal->columns);  break;
-          default:
-            memset(&view->buffer[view->cursor_y * terminal->columns + view->cursor_x], 0, sizeof(buffer_char_t) * (terminal->columns - view->cursor_x));
-          break;
+          case '1': s = 0; e = view->cursor_x; break;
+          case '2': s = 0; e = terminal->columns; break;
+          default: s = view->cursor_x; e = terminal->columns; break;
         }
+        for (int i = s; i < e; ++i)
+          view->buffer[view->cursor_y * terminal->columns + i] = (buffer_char_t){ view->cursor_styling, ' ' };
       } break;
       case 'P': {
         int length = parse_number(&seq[2], 1);
@@ -403,32 +411,46 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         for (int i = view->cursor_x; i < view->cursor_x + length && i < terminal->columns; ++i)
           view->buffer[view->cursor_y * terminal->columns + i].codepoint = ' ';
       } break;
-      case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1), 0), terminal->lines - 1); break;
+      case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1); break;
       case 'h': {
         if (seq[2] == '?') {
-          switch (parse_number(&seq[3], 0)) {
-            case 1: view->cursor_keys_mode = KEYS_MODE_APPLICATION; break;
-            case 12: view->cursor_mode = CURSOR_BLINKING; break;
-            case 25: view->cursor_mode = CURSOR_SOLID; break;
-            case 1004: terminal->reporting_focus = 1; break;
-            case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
-            case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
-            case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
-            default: unhandled = 1; break;
+          const char* next = &seq[3];
+          while (next) {
+            switch (parse_number(next, 0)) {
+              case 1: view->cursor_keys_mode = KEYS_MODE_APPLICATION; break;
+              case 9: view->mouse_tracking_mode = MOUSE_TRACKING_X10; break;
+              case 12: view->cursor_mode = CURSOR_BLINKING; break;
+              case 25: view->cursor_mode = CURSOR_SOLID; break;
+              case 1000: view->mouse_tracking_mode = MOUSE_TRACKING_NORMAL; break;
+              case 1004: terminal->reporting_focus = 1; break;
+              case 1047: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
+              case 1049: terminal_switch_buffer(terminal, VIEW_ALTERNATE_BUFFER); break;
+              case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
+              default: unhandled = 1; break;
+            }
+            if (next = strstr(next, ";"))
+              next++;
           }
         }
       } break;
       case 'l': {
         if (seq[2] == '?') {
-          switch (parse_number(&seq[3], 0)) {
-            case 1: view->cursor_keys_mode = KEYS_MODE_NORMAL; break;
-            case 12: view->cursor_mode = CURSOR_SOLID; break;
-            case 25: view->cursor_mode = CURSOR_HIDDEN; break;
-            case 1004: terminal->reporting_focus = 0; break;
-            case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
-            case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
-            case 2004: terminal->paste_mode = PASTE_NORMAL; break;
-            default: unhandled = 1; break;
+          const char* next = &seq[3];
+          while (next) {
+            switch (parse_number(next, 0)) {
+              case 1: view->cursor_keys_mode = KEYS_MODE_NORMAL; break;
+              case 9: view->mouse_tracking_mode = MOUSE_TRACKING_NONE; break;
+              case 12: view->cursor_mode = CURSOR_SOLID; break;
+              case 25: view->cursor_mode = CURSOR_HIDDEN; break;
+              case 1000: view->mouse_tracking_mode = MOUSE_TRACKING_NONE; break;
+              case 1004: terminal->reporting_focus = 0; break;
+              case 1047: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
+              case 1049: terminal_switch_buffer(terminal, VIEW_NORMAL_BUFFER); break;
+              case 2004: terminal->paste_mode = PASTE_NORMAL; break;
+              default: unhandled = 1; break;
+            }
+            if (next = strstr(next, ";"))
+              next++;
           }
         }
       } break;
@@ -613,6 +635,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   int fixed_width = -1;
   terminal_escape_type_e escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
   while (offset < len) {
+    //if (offset >= 1100)
+    //  fprintf(stderr, "WAT\n");
     if (escape_type != ESCAPE_TYPE_NONE) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
       escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
@@ -1113,23 +1137,34 @@ static int f_terminal_name(lua_State* L) {
   return 1;
 }
 
+static int f_terminal_mouse_tracking_mode(lua_State* L) {
+  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  switch (terminal->views[terminal->current_view].mouse_tracking_mode) {
+    case MOUSE_TRACKING_NONE: lua_pushnil(L); break;
+    case MOUSE_TRACKING_X10: lua_pushliteral(L, "x10"); break;
+    case MOUSE_TRACKING_NORMAL: lua_pushliteral(L, "normal"); break;
+  }
+  return 1;
+}
+
 static const luaL_Reg terminal_api[] = {
-  { "__gc",             f_terminal_gc               },
-  { "new",              f_terminal_new              },
-  { "close",            f_terminal_close            },
-  { "input",            f_terminal_input            },
-  { "lines",            f_terminal_lines            },
-  { "size",             f_terminal_size             },
-  { "update",           f_terminal_update           },
-  { "exited",           f_terminal_exited           },
-  { "cursor",           f_terminal_cursor           },
-  { "focused",          f_terminal_focused          },
-  { "cursor_keys_mode", f_terminal_cursor_keys_mode },
-  { "keypad_keys_mode", f_terminal_keypad_keys_mode },
-  { "pastemode",        f_terminal_pastemode        },
-  { "scrollback",       f_terminal_scrollback       },
-  { "name",             f_terminal_name             },
-  { NULL,               NULL                        }
+  { "__gc",                f_terminal_gc                     },
+  { "new",                 f_terminal_new                    },
+  { "close",               f_terminal_close                  },
+  { "input",               f_terminal_input                  },
+  { "lines",               f_terminal_lines                  },
+  { "size",                f_terminal_size                   },
+  { "update",              f_terminal_update                 },
+  { "exited",              f_terminal_exited                 },
+  { "cursor",              f_terminal_cursor                 },
+  { "focused",             f_terminal_focused                },
+  { "mouse_tracking_mode", f_terminal_mouse_tracking_mode    },
+  { "cursor_keys_mode",    f_terminal_cursor_keys_mode       },
+  { "keypad_keys_mode",    f_terminal_keypad_keys_mode       },
+  { "pastemode",           f_terminal_pastemode              },
+  { "scrollback",          f_terminal_scrollback             },
+  { "name",                f_terminal_name                   },
+  { NULL,                  NULL                              }
 };
 
 

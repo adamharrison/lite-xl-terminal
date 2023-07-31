@@ -173,8 +173,8 @@ function TerminalView:draw()
       end
       local offset = 0
       for i = 1, #line, 2 do
-        local foreground_idx, background_idx, style_idx = ((line[i] >> 17) & 0x1FF), ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
-        local foreground, background = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx]), background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
+        local background_idx, style_idx = ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
+        local background = background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
         local text = line[i+1]
         local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local width = font:get_width(text)
@@ -224,11 +224,16 @@ end
 
 function TerminalView:on_mouse_pressed(button, x, y, clicks)
   if button == "left" then
+    local col, row = self:convert_coordinates(x, y)
     if clicks == 1 then
       self.selection = nil
       self.pressing = true
+      if self.terminal:mouse_tracking_mode() == "x10" then
+        self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+      elseif self.terminal:mouse_tracking_mode() == "normal" then
+        self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+      end
     elseif clicks == 2 then
-      local col, row = self:convert_coordinates(x, y)
       for line_idx, line in ipairs(self.terminal:lines()) do
         if line_idx == row + 1 then
           local text = ""
@@ -245,8 +250,7 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
         end
       end
     elseif clicks == 3 then
-      local col, line = self:convert_coordinates(x, y)
-      self.selection = { 0, line, 0, line + 1 }
+      self.selection = { 0, row, 0, row + 1 }
     end
   end
 end
@@ -260,9 +264,13 @@ function TerminalView:on_mouse_moved(x, y)
   end
 end
 
-function TerminalView:on_mouse_released(button)
+function TerminalView:on_mouse_released(button, x, y)
   if button == "left" then
     self.pressing = false
+    local col, row = self:convert_coordinates(x, y)
+    if self.terminal:mouse_tracking_mode() == "normal" then
+      self.terminal:input("\x1B[M" .. string.char(32 + 3) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+    end
   end
 end
 
