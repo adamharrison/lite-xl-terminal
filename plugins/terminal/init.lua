@@ -100,8 +100,8 @@ end
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
-    self.columns = math.floor((self.size.x - style.padding.x*2) / self.options.font:get_width("W"))
-    self.lines = math.floor((self.size.y - style.padding.y*2) / self.options.font:get_height())
+    self.columns = math.max(math.floor((self.size.x - style.padding.x*2) / self.options.font:get_width("W")), 1)
+    self.lines = math.max(math.floor((self.size.y - style.padding.y*2) / self.options.font:get_height()), 1)
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
