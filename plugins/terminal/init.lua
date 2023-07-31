@@ -259,6 +259,8 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
 end
 
 function TerminalView:on_mouse_moved(x, y)
+  self.mouse_x = x
+  self.mouse_y = y
   if self.pressing then
     local col, line = self:convert_coordinates(x, y)
     if not self.selection then self.selection = { col, line } end
@@ -296,7 +298,19 @@ command.add(TerminalView, {
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
   ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.options.newline) end,
-  ["terminal:scroll"] = function(cmd, amount) core.active_view.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1)) end,
+  ["terminal:scroll"] = function(cmd, amount)
+    local tv = core.active_view
+    if tv.terminal:mouse_tracking_mode() then
+      local col, row = tv:convert_coordinates(tv.mouse_x, tv.mouse_y)
+      if tv.terminal:mouse_tracking_mode() == "normal" then
+        tv.terminal:input("\x1B[M" .. string.char(amount > 0 and 64 or 65) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+      elseif tv.terminal:mouse_tracking_mode() == "sgr" then
+        tv.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
+      end
+    else
+      tv.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1))
+    end
+  end,
   ["terminal:break"] = function() core.active_view.terminal:input("\x03") end,
   ["terminal:eof"] = function() core.active_view.terminal:input("\x04") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
@@ -309,7 +323,7 @@ command.add(TerminalView, {
     end
   end,
   ["terminal:page-up"] = function() core.active_view.terminal:input("\x1B[5~") end,
-    ["terminal:page-down"] = function() core.active_view.terminal:input("\x1B[6~") end,
+  ["terminal:page-down"] = function() core.active_view.terminal:input("\x1B[6~") end,
   ["terminal:scroll-up"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() + core.active_view.lines) end,
   ["terminal:scroll-down"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() - core.active_view.lines) end,
   ["terminal:scroll-to-end"] = function() view.terminal:scrollback(0) end,
