@@ -16,7 +16,9 @@ config.plugins.terminal = common.merge({
   debug = false,
   term = "xterm-256color",
   shell = default_shell,
-  newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\n"),
+  -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
+  -- doesn't allow you to newline if you don't set it to `\r`.
+  newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
   backspace = "\x7F",
   delete = "\x1B[3~",
   arguments = { },

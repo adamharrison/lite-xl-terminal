@@ -935,8 +935,10 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     term.c_cc[VERASE] = '\x7F';
     term.c_cc[VEOL] = '\n';
     term.c_cc[VEOF] = 4;
-    term.c_lflag |= ISIG | ECHO | ICANON;
-    term.c_iflag |= IUTF8;
+    term.c_lflag |= ISIG | ECHO | ICANON | IEXTEN | ECHOE | ECHOK | ECHOCTL | ECHOKE;
+    term.c_cflag |= CS8 | CREAD;
+    term.c_iflag |= IUTF8 | ICRNL | IXON;
+    term.c_oflag |= NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
     terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
     if (terminal->pid == -1) {
       free(terminal);
