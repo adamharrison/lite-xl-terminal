@@ -353,12 +353,13 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   #endif
   view_t* view = &terminal->views[terminal->current_view];
   int unhandled = 0;
+  int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
     switch (seq[seq_end]) {
       case '@': {
         int length = parse_number(&seq[2], 1);
-        memmove(&view->buffer[terminal->columns * view->cursor_y + view->cursor_x + length], &view->buffer[terminal->columns * view->cursor_y + view->cursor_x], sizeof(buffer_char_t) * (terminal->columns - view->cursor_x + length));
+        memmove(&view->buffer[terminal->columns * view->cursor_y + view->cursor_x + length], &view->buffer[terminal->columns * view->cursor_y + view->cursor_x], sizeof(buffer_char_t) * max(terminal->columns - (view->cursor_x + length), 0));
         for (int i = view->cursor_x; i < min(view->cursor_x + length, terminal->columns); ++i)
           view->buffer[terminal->columns * view->cursor_y + i].codepoint = ' ';
       } break;
@@ -414,6 +415,22 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         }
         for (int i = s; i < e; ++i)
           view->buffer[view->cursor_y * terminal->columns + i] = (buffer_char_t){ view->cursor_styling, ' ' };
+      } break;
+      case 'L': {
+        int length = parse_number(&seq[2], 1);
+        memmove(&view->buffer[terminal->columns * (view->cursor_y + length)], &view->buffer[terminal->columns * view->cursor_y], sizeof(buffer_char_t) * terminal->columns * max(end - (view->cursor_y + length), 0));
+        for (int y = view->cursor_y; y < min(view->cursor_y + length, end); ++y) {
+          for (int i = 0; i < terminal->columns; ++i)
+            view->buffer[terminal->columns * y + i].codepoint = ' ';
+        }
+      } break;
+      case 'M': {
+        int length = parse_number(&seq[2], 1);
+        memmove(&view->buffer[terminal->columns * view->cursor_y], &view->buffer[terminal->columns * (view->cursor_y + length)], sizeof(buffer_char_t) * terminal->columns * max(terminal->lines - (view->cursor_y + length), 0));
+        for (int y = end - length; y < end; ++y) {
+          for (int i = 0; i < terminal->columns; ++i)
+            view->buffer[terminal->columns * y + i].codepoint = ' ';
+        }
       } break;
       case 'P': {
         int length = parse_number(&seq[2], 1);
@@ -717,6 +734,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   view_t* view = &terminal->views[terminal->current_view];
   int fixed_width = -1;
   terminal_escape_type_e escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
+  int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
   while (offset < len) {
     if (escape_type != ESCAPE_TYPE_NONE) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
@@ -760,7 +778,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
           view->cursor_x = (view->cursor_x + view->tab_size) - ((view->cursor_x + view->tab_size) % view->tab_size);
         } break;
         case '\n': {
-          if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
+          if (view->cursor_y < (end - 1))
             ++view->cursor_y;
           else
             terminal_shift_buffer(terminal);
@@ -797,7 +815,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         default:
           if (view->cursor_x >= terminal->columns) {
             view->cursor_x = 0;
-            if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
+            if (view->cursor_y < (end - 1))
               ++view->cursor_y;
             else
               terminal_shift_buffer(terminal);
