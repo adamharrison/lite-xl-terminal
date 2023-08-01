@@ -153,9 +153,24 @@ function TerminalView:set_target_size(axis, value)
   end
 end
 
+function TerminalView:convert_color(int, target)
+  local attributes = int >> 24
+  local type = (attributes & 0x7)
+  if type == 0 then
+    if target == "foreground" then return self.options.text, attributes end
+    return self.options.background, attributes
+  elseif type == 1 then
+    if target == "foreground" then return self.options.background, attributes end
+    return self.options.text, attributes
+  elseif type == 2 then
+    local index = (int >> 16) & 0xFF
+    return self.options.colors[index], attributes
+  elseif type == 3 then
+    return { ((int >> 16) & 0xFF), ((int >> 8) & 0xFF), ((int >> 0) & 0xFF), 255 }, attributes
+  end
+  return nil
+end
 
-local COLOR_NOT_SET = 256
-local COLOR_INVERSE = 257
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
@@ -180,12 +195,11 @@ function TerminalView:draw()
       end
       local offset = 0
       for i = 1, #line, 2 do
-        local background_idx, style_idx = ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
-        local background = background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
+        local background, style = self:convert_color(line[i] & 0xFFFFFFFF, "background")
         local text = line[i+1]
-        local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
+        local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local width = font:get_width(text)
-        if background then
+        if background and background ~= self.options.background then
           renderer.draw_rect(x, y, width, lh, background)
         end
         x = x + width
@@ -212,12 +226,11 @@ function TerminalView:draw()
         end
       end
       for i = 1, #line, 2 do
-        local foreground_idx, style_idx = ((line[i] >> 17) & 0x1FF), (line[i] & 0x0F)
-        local foreground = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx])
+        local foreground, style = self:convert_color(line[i] >> 32, "foreground")
         local text = line[i+1]
-        local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
+        local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local length = text:ulen()
-        x = renderer.draw_text(font, text, x, y, foreground or self.options.text)
+        x = renderer.draw_text(font, text, x, y, foreground)
         offset = offset + length
       end
       y = y + lh

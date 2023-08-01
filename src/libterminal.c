@@ -49,26 +49,52 @@
 #define LIBTERMINAL_CHUNK_SIZE 4096
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
-#define LIBTERMINAL_COLOR_NOT_SET 256
-#define LIBTERMINAL_COLOR_INVERSE 257
 #define LIBTERMINAL_DEFAULT_TAB_SIZE 8
-#define LIBTERMINAL_NO_STYLING (buffer_styling_t) { LIBTERMINAL_COLOR_NOT_SET, LIBTERMINAL_COLOR_NOT_SET, 0 }
 
 typedef enum attributes_e {
-  ATTRIBUTE_NONE = 0,
-  ATTRIBUTE_BOLD = 1,
-  ATTRIBUTE_ITALIC = 2,
-  ATTRIBUTE_UNDERLINE = 4
+  // Colors
+  ATTRIBUTE_UNSET_COLOR = 0,
+  ATTRIBUTE_INVERSE_COLOR = 1,
+  ATTRIBUTE_INDEX_COLOR = 2,
+  ATTRIBUTE_RGB_COLOR = 3,
+  ATTRIBUTE_UNTARGETED_COLOR = 4,
+  // Attributes
+  ATTRIBUTE_BOLD = 8,
+  ATTRIBUTE_ITALIC = 16,
+  ATTRIBUTE_UNDERLINE = 32
 } attributes_e;
+
+typedef struct color_t {
+  union {
+    struct {
+      unsigned char attributes;
+      union {
+        struct {
+          unsigned char r;
+          unsigned char g;
+          unsigned char b;
+        };
+        unsigned char index;
+      };
+    };
+    unsigned int value;
+  };
+} color_t;
+static color_t indexed_color(int index) { return (color_t) { .attributes = ATTRIBUTE_INDEX_COLOR, .index = index }; }
+static color_t rgb_color(unsigned char r, unsigned char g, unsigned char b) { return (color_t) { .attributes = ATTRIBUTE_RGB_COLOR, .r = r, .g = g, .b = b }; }
+static color_t UNSET_COLOR = { .attributes = ATTRIBUTE_UNSET_COLOR, .index = 0 };
+static color_t INVERSE_COLOR = { .attributes = ATTRIBUTE_INVERSE_COLOR, .index = 0 };
+static color_t UNTARGETED_COLOR = { .attributes = ATTRIBUTE_UNTARGETED_COLOR, .index = 0 };
+
+#define LIBTERMINAL_NO_STYLING (buffer_styling_t) { UNSET_COLOR, UNSET_COLOR }
 
 typedef struct buffer_styling_t {
   union {
     struct {
-      unsigned int foreground : 9;
-      unsigned int background : 9;
-      unsigned int attributes : 4;
+      color_t foreground;
+      color_t background;
     };
-    unsigned int value;
+    unsigned long long value;
   };
 } buffer_styling_t;
 
@@ -128,7 +154,7 @@ typedef struct view_t {
   keys_mode_e cursor_keys_mode;
   keys_mode_e keypad_keys_mode;
   mouse_tracking_mode_e mouse_tracking_mode;
-  unsigned char palette[256];                // Custom palette as per the ^][4;#;rgb:24/04/3C command. The fuck?
+  color_t palette[256];                // Custom palette as per the ^][4;#;rgb:24/04/3C command. The fuck?
   charset_e charset;
   int tab_size;
   // The index of where the scrolling region starts/ends.
@@ -328,7 +354,7 @@ static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_end = -1;
     terminal->views[VIEW_ALTERNATE_BUFFER].scrolling_region_start = -1;
     for (int i = 0; i < 256; ++i)
-      terminal->views[VIEW_ALTERNATE_BUFFER].palette[i] = i;
+      terminal->views[VIEW_ALTERNATE_BUFFER].palette[i] = indexed_color(i);
   }
 }
 
@@ -520,73 +546,74 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         int r = 0,g = 0,b = 0;
         int foreground = 0;
         while (1) {
-          int target_color = -1, target_foreground = 0;
+          color_t target_color = UNTARGETED_COLOR;
+          int target_foreground = 0;
           switch (state) {
             case DISPLAY_STATE_NONE:
               switch (parse_number(&seq[offset], 0)) {
                 case 0  : view->cursor_styling = LIBTERMINAL_NO_STYLING; break;
-                case 1  : view->cursor_styling.attributes |= ATTRIBUTE_BOLD; break;
-                case 3  : view->cursor_styling.attributes |= ATTRIBUTE_ITALIC; break;
-                case 4  : view->cursor_styling.attributes |= ATTRIBUTE_UNDERLINE; break;
+                case 1  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_BOLD; break;
+                case 3  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_ITALIC; break;
+                case 4  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_UNDERLINE; break;
                 case 7  : {
                   view->cursor_styling_inversed = 1;
-                  int background = view->cursor_styling.background;
-                  if (view->cursor_styling.foreground == LIBTERMINAL_COLOR_NOT_SET)
-                    view->cursor_styling.background = LIBTERMINAL_COLOR_INVERSE;
-                  else if (view->cursor_styling.foreground == LIBTERMINAL_COLOR_INVERSE)
-                    view->cursor_styling.background = LIBTERMINAL_COLOR_NOT_SET;
+                  color_t background = view->cursor_styling.background;
+                  if (view->cursor_styling.foreground.value == UNSET_COLOR.value)
+                    view->cursor_styling.background = INVERSE_COLOR;
+                  else if (view->cursor_styling.foreground.value == INVERSE_COLOR.value)
+                    view->cursor_styling.background = UNSET_COLOR;
                   else
                     view->cursor_styling.background = view->cursor_styling.foreground;
-                  if (background == LIBTERMINAL_COLOR_NOT_SET)
-                    view->cursor_styling.foreground = LIBTERMINAL_COLOR_INVERSE;
-                  else if (background == LIBTERMINAL_COLOR_INVERSE)
-                    view->cursor_styling.foreground = LIBTERMINAL_COLOR_NOT_SET;
+                  if (background.value == UNSET_COLOR.value)
+                    view->cursor_styling.foreground = INVERSE_COLOR;
+                  else if (background.value == INVERSE_COLOR.value)
+                    view->cursor_styling.foreground = UNSET_COLOR;
                   else
                     view->cursor_styling.foreground = view->cursor_styling.background;
                 } break;
-                case 30 : target_foreground = 1; target_color = 0; break;
-                case 31 : target_foreground = 1; target_color = 1; break;
-                case 32 : target_foreground = 1; target_color = 2; break;
-                case 33 : target_foreground = 1; target_color = 3; break;
-                case 34 : target_foreground = 1; target_color = 4; break;
-                case 35 : target_foreground = 1; target_color = 5; break;
-                case 36 : target_foreground = 1; target_color = 6; break;
-                case 37 : target_foreground = 1; target_color = 7; break;
+                case 30 : target_foreground = 1; target_color = view->palette[0]; break;
+                case 31 : target_foreground = 1; target_color = view->palette[1]; break;
+                case 32 : target_foreground = 1; target_color = view->palette[2]; break;
+                case 33 : target_foreground = 1; target_color = view->palette[3]; break;
+                case 34 : target_foreground = 1; target_color = view->palette[4]; break;
+                case 35 : target_foreground = 1; target_color = view->palette[5]; break;
+                case 36 : target_foreground = 1; target_color = view->palette[6]; break;
+                case 37 : target_foreground = 1; target_color = view->palette[7]; break;
                 case 38 : state = DISPLAY_STATE_COLOR_MODE; foreground = 1; break;
-                case 39 : target_foreground = 1; target_color = LIBTERMINAL_COLOR_NOT_SET; break;
-                case 40 : target_foreground = 0; target_color = 0; break;
-                case 41 : target_foreground = 0; target_color = 1; break;
-                case 42 : target_foreground = 0; target_color = 2; break;
-                case 43 : target_foreground = 0; target_color = 3; break;
-                case 44 : target_foreground = 0; target_color = 4; break;
-                case 45 : target_foreground = 0; target_color = 5; break;
-                case 46 : target_foreground = 0; target_color = 6; break;
-                case 47 : target_foreground = 0; target_color = 7; break;
+                case 39 : target_foreground = 1; target_color = UNSET_COLOR; break;
+                case 40 : target_foreground = 0; target_color = view->palette[0]; break;
+                case 41 : target_foreground = 0; target_color = view->palette[1]; break;
+                case 42 : target_foreground = 0; target_color = view->palette[2]; break;
+                case 43 : target_foreground = 0; target_color = view->palette[3]; break;
+                case 44 : target_foreground = 0; target_color = view->palette[4]; break;
+                case 45 : target_foreground = 0; target_color = view->palette[5]; break;
+                case 46 : target_foreground = 0; target_color = view->palette[6]; break;
+                case 47 : target_foreground = 0; target_color = view->palette[7]; break;
                 case 48 : state = DISPLAY_STATE_COLOR_MODE; foreground = 0; break;
-                case 49 : target_foreground = 0; target_color = LIBTERMINAL_COLOR_NOT_SET; break;
-                case 90 : target_foreground = 1; target_color = 251; break;
-                case 91 : target_foreground = 1; target_color = 160; break;
-                case 92 : target_foreground = 1; target_color = 119; break;
-                case 93 : target_foreground = 1; target_color = 226; break;
-                case 94 : target_foreground = 1; target_color = 81; break;
-                case 95 : target_foreground = 1; target_color = 201; break;
-                case 96 : target_foreground = 1; target_color = 51; break;
-                case 97 : target_foreground = 1; target_color = 231; break;
-                case 100: target_foreground = 0; target_color = 251; break;
-                case 101: target_foreground = 0; target_color = 160; break;
-                case 102: target_foreground = 0; target_color = 119; break;
-                case 103: target_foreground = 0; target_color = 226; break;
-                case 104: target_foreground = 0; target_color = 81; break;
-                case 105: target_foreground = 0; target_color = 201; break;
-                case 106: target_foreground = 0; target_color = 51; break;
-                case 107: target_foreground = 0; target_color = 231; break;
+                case 49 : target_foreground = 0; target_color = UNSET_COLOR; break;
+                case 90 : target_foreground = 1; target_color = view->palette[251]; break;
+                case 91 : target_foreground = 1; target_color = view->palette[160]; break;
+                case 92 : target_foreground = 1; target_color = view->palette[119]; break;
+                case 93 : target_foreground = 1; target_color = view->palette[226]; break;
+                case 94 : target_foreground = 1; target_color = view->palette[81]; break;
+                case 95 : target_foreground = 1; target_color = view->palette[201]; break;
+                case 96 : target_foreground = 1; target_color = view->palette[51]; break;
+                case 97 : target_foreground = 1; target_color = view->palette[231]; break;
+                case 100: target_foreground = 0; target_color = view->palette[251]; break;
+                case 101: target_foreground = 0; target_color = view->palette[160]; break;
+                case 102: target_foreground = 0; target_color = view->palette[119]; break;
+                case 103: target_foreground = 0; target_color = view->palette[226]; break;
+                case 104: target_foreground = 0; target_color = view->palette[81]; break;
+                case 105: target_foreground = 0; target_color = view->palette[201]; break;
+                case 106: target_foreground = 0; target_color = view->palette[51]; break;
+                case 107: target_foreground = 0; target_color = view->palette[231]; break;
                 default: unhandled = 1; break;
               }
             break;
             case DISPLAY_STATE_COLOR_MODE: state = parse_number(&seq[offset], 0) != 5 ? DISPLAY_STATE_COLOR_VALUE_R : DISPLAY_STATE_COLOR_VALUE_IDX; break;
             case DISPLAY_STATE_COLOR_VALUE_IDX:
               target_foreground = foreground;
-              target_color = parse_number(&seq[offset], 0) & 0xFF;
+              target_color = view->palette[(parse_number(&seq[offset], 0) & 0xFF)];
               state = DISPLAY_STATE_NONE;
             break;
             case DISPLAY_STATE_COLOR_VALUE_R: r = (parse_number(&seq[offset], 0) & 0xFF); state = DISPLAY_STATE_COLOR_VALUE_G; break;
@@ -594,17 +621,17 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case DISPLAY_STATE_COLOR_VALUE_B: {
               target_foreground = foreground;
               b = parse_number(&seq[offset], 0) & 0xFF;
-              target_color = convert_to_ansi_color_index(r, g, b);
+              target_color = rgb_color(r, g, b);
               state = DISPLAY_STATE_NONE;
             } break;
           }
-          if (target_color != -1) {
+          if (target_color.value != UNTARGETED_COLOR.value) {
             if (view->cursor_styling_inversed)
               target_foreground = !target_foreground;
             if (target_foreground)
-              view->cursor_styling.foreground = view->palette[target_color];
+              view->cursor_styling.foreground = target_color;
             else
-              view->cursor_styling.background = view->palette[target_color];
+              view->cursor_styling.background = target_color;
           }
           char* next = strchr(&seq[offset], ';');
           if (!next)
@@ -642,7 +669,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case '4':
         int idx, r,g,b;
         if (sscanf(&seq[3], ";%d;rgb:%x/%x/%x", &idx, &r, &g, &b) == 4) {
-          view->palette[idx] = convert_to_ansi_color_index(r,g,b);
+          view->palette[idx] = rgb_color(r, g, b);
         } else
           unhandled = 1;
       break;
@@ -1005,7 +1032,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
   for (int i = 0; i < VIEW_MAX; ++i) {
     for (int j = 0; j < 256; ++j)
-      terminal->views[i].palette[j] = j;
+      terminal->views[i].palette[j] = indexed_color(j);
     terminal->views[i].scrolling_region_end = -1;
     terminal->views[i].scrolling_region_start = -1;
     terminal->views[i].cursor_styling = LIBTERMINAL_NO_STYLING;
@@ -1093,7 +1120,17 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
   buffer_styling_t style = start->styling;
   while (1) {
     if (start >= end || start->styling.value != style.value) {
-      lua_pushinteger(L, style.foreground << 17 | style.background << 8 | style.attributes);
+      unsigned long long packed = (
+        ((unsigned long long)style.foreground.attributes << 56) |
+        ((unsigned long long)style.foreground.r << 48) |
+        ((unsigned long long)style.foreground.g << 40) |
+        ((unsigned long long)style.foreground.b << 32) |
+        ((unsigned long long)style.background.attributes << 24) |
+        ((unsigned long long)style.background.r << 16) |
+        ((unsigned long long)style.background.g << 8) |
+        ((unsigned long long)style.background.b << 0)
+      );
+      lua_pushinteger(L, packed);
       lua_rawseti(L, -2, ++group);
       lua_pushlstring(L, text_buffer, block_size);
       lua_rawseti(L, -2, ++group);
