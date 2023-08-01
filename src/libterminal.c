@@ -662,7 +662,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
     switch (seq[2]) {
       case '0':
         if (strlen(seq) >= 5 && seq[3] == ';')
-          strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
+          strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 4));
       break;
       case '4': {
         int idx, r,g,b;
