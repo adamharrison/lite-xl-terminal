@@ -67,21 +67,21 @@ typedef enum attributes_e {
 typedef struct color_t {
   union {
     struct {
-      unsigned char attributes;
+      uint8_t attributes;
       union {
         struct {
-          unsigned char r;
-          unsigned char g;
-          unsigned char b;
+          uint8_t r;
+          uint8_t g;
+          uint8_t b;
         };
-        unsigned char index;
+        uint8_t index;
       };
     };
-    unsigned int value;
+    uint32_t value;
   };
 } color_t;
-static color_t indexed_color(int index) { return (color_t) { .attributes = ATTRIBUTE_INDEX_COLOR, .index = index }; }
-static color_t rgb_color(unsigned char r, unsigned char g, unsigned char b) { return (color_t) { .attributes = ATTRIBUTE_RGB_COLOR, .r = r, .g = g, .b = b }; }
+static color_t indexed_color(uint8_t index) { return (color_t) { .attributes = ATTRIBUTE_INDEX_COLOR, .index = index }; }
+static color_t rgb_color(uint8_t r, uint8_t g, uint8_t b) { return (color_t) { .attributes = ATTRIBUTE_RGB_COLOR, .r = r, .g = g, .b = b }; }
 static color_t UNSET_COLOR = { .attributes = ATTRIBUTE_UNSET_COLOR, .index = 0 };
 static color_t INVERSE_COLOR = { .attributes = ATTRIBUTE_INVERSE_COLOR, .index = 0 };
 static color_t UNTARGETED_COLOR = { .attributes = ATTRIBUTE_UNTARGETED_COLOR, .index = 0 };
@@ -94,13 +94,13 @@ typedef struct buffer_styling_t {
       color_t foreground;
       color_t background;
     };
-    unsigned long long value;
+    uint64_t value;
   };
 } buffer_styling_t;
 
 typedef struct buffer_char_t {
   buffer_styling_t styling;
-  unsigned int codepoint;
+  uint32_t codepoint;
 } buffer_char_t;
 
 typedef struct backbuffer_page_t {
@@ -373,9 +373,6 @@ typedef enum terminal_escape_type_e {
   ESCAPE_TYPE_UNKNOWN
 } terminal_escape_type_e;
 
-static int convert_to_ansi_color_index(int r, int g, int b) {
-  return 16 + 36 * ((r * 6) / 256) + 6 * ((g * 6) / 256) + ((b * 6) / 256);
-}
 
 static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e type, const char* seq) {
   #ifdef LIBTERMINAL_DEBUG_ESCAPE
@@ -543,7 +540,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           DISPLAY_STATE_COLOR_VALUE_B
         };
         enum DisplayState state = DISPLAY_STATE_NONE;
-        int r = 0,g = 0,b = 0;
+        uint8_t r = 0,g = 0,b = 0;
         int foreground = 0;
         while (1) {
           color_t target_color = UNTARGETED_COLOR;
@@ -1120,15 +1117,15 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
   buffer_styling_t style = start->styling;
   while (1) {
     if (start >= end || start->styling.value != style.value) {
-      unsigned long long packed = (
-        ((unsigned long long)style.foreground.attributes << 56) |
-        ((unsigned long long)style.foreground.r << 48) |
-        ((unsigned long long)style.foreground.g << 40) |
-        ((unsigned long long)style.foreground.b << 32) |
-        ((unsigned long long)style.background.attributes << 24) |
-        ((unsigned long long)style.background.r << 16) |
-        ((unsigned long long)style.background.g << 8) |
-        ((unsigned long long)style.background.b << 0)
+      uint64_t packed = (
+        ((uint64_t)style.foreground.attributes << 56) |
+        ((uint64_t)style.foreground.r << 48) |
+        ((uint64_t)style.foreground.g << 40) |
+        ((uint64_t)style.foreground.b << 32) |
+        ((uint64_t)style.background.attributes << 24) |
+        ((uint64_t)style.background.r << 16) |
+        ((uint64_t)style.background.g << 8) |
+        ((uint64_t)style.background.b << 0)
       );
       lua_pushinteger(L, packed);
       lua_rawseti(L, -2, ++group);
