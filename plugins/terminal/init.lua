@@ -213,8 +213,8 @@ function TerminalView:draw()
         end
       end
       for i = 1, #line, 2 do
-        local foreground_idx, background_idx, style_idx = ((line[i] >> 17) & 0x1FF), ((line[i] >> 8) & 0x1FF), (line[i] & 0x0F)
-        local foreground, background = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx]), background_idx ~= COLOR_NOT_SET and (background_idx == COLOR_INVERSE and self.options.text or self.options.colors[background_idx])
+        local foreground_idx, style_idx = ((line[i] >> 17) & 0x1FF), (line[i] & 0x0F)
+        local foreground = foreground_idx ~= COLOR_NOT_SET and (foreground_idx == COLOR_INVERSE and self.options.background or self.options.colors[foreground_idx])
         local text = line[i+1]
         local font = ((style_idx & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local length = text:ulen()
