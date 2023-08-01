@@ -40,8 +40,10 @@
   #include <lite_xl_plugin_api.h>
 #endif
 
-static int min(int a, int b) { return a < b ? a : b; }
-static int max(int a, int b) { return a > b ? a : b; }
+#ifndef min
+  static int min(int a, int b) { return a < b ? a : b; }
+  static int max(int a, int b) { return a > b ? a : b; }
+#endif
 
 #define LIBTERMINAL_BACKBUFFER_PAGE_LINES 200
 #define LIBTERMINAL_CHUNK_SIZE 4096
