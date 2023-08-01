@@ -454,6 +454,13 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         for (int i = view->cursor_x; i < view->cursor_x + length && i < terminal->columns; ++i)
           view->buffer[view->cursor_y * terminal->columns + i].codepoint = ' ';
       } break;
+      case 'b': {
+        int length = parse_number(&seq[2], 1);
+        if (view->cursor_x > 0) {
+          for (int i = view->cursor_x - 1; i < min(view->cursor_x + length, terminal->columns); ++i)
+            view->buffer[view->cursor_y * terminal->columns + i].codepoint = view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint;
+        }
+      } break;
       case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1); break;
       case 'h': {
         if (seq[2] == '?') {
@@ -867,6 +874,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
       }
     }
   }
+  terminal->buffered_sequence[buffered_sequence_index] = 0;
 }
 
 #ifdef _WIN32
