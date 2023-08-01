@@ -354,6 +354,12 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
     switch (seq[seq_end]) {
+      case '@': {
+        int length = parse_number(&seq[2], 1);
+        memmove(&view->buffer[terminal->columns * view->cursor_y + view->cursor_x + length], &view->buffer[terminal->columns * view->cursor_y + view->cursor_x], sizeof(buffer_char_t) * (terminal->columns - view->cursor_x + length));
+        for (int i = view->cursor_x; i < min(view->cursor_x + length, terminal->columns); ++i)
+          view->buffer[terminal->columns * view->cursor_y + i].codepoint = ' ';
+      } break;
       case 'A': view->cursor_y = max(view->cursor_y - parse_number(&seq[2], 1), 0);     break;
       case 'B': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); break;
       case 'C': view->cursor_x = min(view->cursor_x + parse_number(&seq[2], 1), terminal->columns - 1); break;

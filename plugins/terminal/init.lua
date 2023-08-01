@@ -98,6 +98,14 @@ function TerminalView:new(options)
   self.options = options
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
+  self.routine = core.add_thread(function()
+    while not self.terminal:exited() do
+      if self.terminal:update() then
+        core.redraw = true
+      end
+      coroutine.yield(1 / config.fps)
+    end
+  end)
 end
 
 
@@ -128,9 +136,6 @@ function TerminalView:update()
           core.redraw = true
         end
         core.blink_timer = tb
-      end
-      if self.terminal:update() then
-        core.redraw = true
       end
     else
       command.perform("terminal:toggle")
@@ -463,6 +468,7 @@ core.status_view:add_item({
 keymap.add {
   ["return"] = "terminal:return",
   ["backspace"] = "terminal:backspace",
+  ["shift+backspace"] = "terminal:backspace",
   ["delete"] = "terminal:delete",
   ["ctrl+backspace"] = "terminal:ctrl-backspace",
   ["alt+backspace"] = "terminal:alt-backspace",
