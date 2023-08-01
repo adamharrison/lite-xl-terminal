@@ -109,7 +109,7 @@ function TerminalView:update()
       if not self.terminal then
         self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
         self.routine = self.routine or core.add_thread(function()
-          while self.terminal and not self.terminal:exited() do
+          while self.terminal do
             if self.terminal:update() then
               core.redraw = true
             end
@@ -140,6 +140,7 @@ function TerminalView:update()
     else
       command.perform("terminal:toggle")
       self.terminal = nil
+      self.routine = nil
     end
   end
   TerminalView.super.update(self)
@@ -312,7 +313,9 @@ function TerminalView:on_text_input(text)
 end
 
 
-command.add(TerminalView, {
+command.add(function()
+  return core.active_view:is(TerminalView) and core.active_view.terminal
+end, {
   ["terminal:backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace) end,
   ["terminal:ctrl-backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace == "\b" and "\x7F" or "\b") end,
   ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B" .. core.active_view.options.backspace) end,
