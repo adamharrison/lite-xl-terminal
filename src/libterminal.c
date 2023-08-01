@@ -400,7 +400,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'K': {
         int s, e;
         switch (seq[2]) {
-          case '1': s = 0; e = view->cursor_x; break;
+          case '1': s = 0; e = view->cursor_x + 1; break;
           case '2': s = 0; e = terminal->columns; break;
           default: s = view->cursor_x; e = terminal->columns; break;
         }
