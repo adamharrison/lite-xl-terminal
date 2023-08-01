@@ -21,6 +21,7 @@
     #include <pty.h>
   #endif
 #endif
+#include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
 #include <errno.h>
