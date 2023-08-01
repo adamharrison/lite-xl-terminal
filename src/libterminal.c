@@ -710,8 +710,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   int fixed_width = -1;
   terminal_escape_type_e escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
   while (offset < len) {
-    //if (offset >= 1100)
-    //  fprintf(stderr, "WAT\n");
     if (escape_type != ESCAPE_TYPE_NONE) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
       escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
@@ -754,7 +752,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
           view->cursor_x = (view->cursor_x + view->tab_size) - ((view->cursor_x + view->tab_size) % view->tab_size);
         } break;
         case '\n': {
-          view->cursor_x = 0;
           if (view->cursor_y < ((view->scrolling_region_end != -1 ? view->scrolling_region_end : terminal->lines) - 1))
             ++view->cursor_y;
           else
@@ -986,12 +983,12 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     term.c_cc[VSTOP] = '\x11';
     term.c_cc[VSUSP] = 26;
     term.c_cc[VERASE] = '\x7F';
-    term.c_cc[VEOL] = '\n';
+    term.c_cc[VEOL] = 0;
     term.c_cc[VEOF] = 4;
     term.c_lflag |= ISIG | ECHO | ICANON | IEXTEN | ECHOE | ECHOK | ECHOCTL | ECHOKE;
     term.c_cflag |= CS8 | CREAD;
     term.c_iflag |= IUTF8 | ICRNL | IXON;
-    term.c_oflag |= NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
+    term.c_oflag |= OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
     terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
     if (terminal->pid == -1) {
       free(terminal);
@@ -1028,10 +1025,7 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
         break;
       style = start->styling;
     }
-    if (start->codepoint != 0) {
-      block_size += codepoint_to_utf8(start->codepoint, &text_buffer[block_size]);
-    } else
-      text_buffer[block_size++] = ' ';
+    block_size += codepoint_to_utf8(start->codepoint != 0 ? start->codepoint : ' ', &text_buffer[block_size]);
     ++start;
   }
 }
