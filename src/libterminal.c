@@ -426,7 +426,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       } break;
       case 'M': {
         int length = parse_number(&seq[2], 1);
-        memmove(&view->buffer[terminal->columns * view->cursor_y], &view->buffer[terminal->columns * (view->cursor_y + length)], sizeof(buffer_char_t) * terminal->columns * max(terminal->lines - (view->cursor_y + length), 0));
+        memmove(&view->buffer[terminal->columns * view->cursor_y], &view->buffer[terminal->columns * (view->cursor_y + length)], sizeof(buffer_char_t) * terminal->columns * max(end - (view->cursor_y + length), 0));
         for (int y = end - length; y < end; ++y) {
           for (int i = 0; i < terminal->columns; ++i)
             view->buffer[terminal->columns * y + i].codepoint = ' ';
@@ -734,7 +734,6 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   view_t* view = &terminal->views[terminal->current_view];
   int fixed_width = -1;
   terminal_escape_type_e escape_type = parse_partial_sequence(terminal->buffered_sequence, buffered_sequence_index, &fixed_width);
-  int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
   while (offset < len) {
     if (escape_type != ESCAPE_TYPE_NONE) {
       terminal->buffered_sequence[buffered_sequence_index++] = str[offset];
@@ -759,6 +758,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
       }
       ++offset;
     } else {
+      int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
       offset += utf8_to_codepoint(&str[offset], &codepoint);
       switch (codepoint) {
         case 0x00:
@@ -780,8 +780,9 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
         case '\n': {
           if (view->cursor_y < (end - 1))
             ++view->cursor_y;
-          else
+          else {
             terminal_shift_buffer(terminal);
+          }
         } break;
         case 0x0B:
         case 0x0C:
