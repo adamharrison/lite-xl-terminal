@@ -664,13 +664,13 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         if (strlen(seq) >= 5 && seq[3] == ';')
           strncpy(terminal->name, &seq[4], min(sizeof(terminal->name) - 1, strlen(seq) - 5));
       break;
-      case '4':
+      case '4': {
         int idx, r,g,b;
         if (sscanf(&seq[3], ";%d;rgb:%x/%x/%x", &idx, &r, &g, &b) == 4) {
           view->palette[idx] = rgb_color(r, g, b);
         } else
           unhandled = 1;
-      break;
+      } break;
       default: unhandled = 1; break;
     }
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
