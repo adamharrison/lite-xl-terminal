@@ -280,7 +280,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     // We perform this song and dance in case of Guldoman levels of resizing.
     int start = min(view->scrolling_region_start, terminal->lines - 1);
     int start_plus_1 = min((view->scrolling_region_start + 1), terminal->lines - 1);
-    int end = min(view->scrolling_region_end, terminal->lines - 1);
+    int end = min(view->scrolling_region_end, terminal->lines);
     if (start_plus_1 != start)
       memmove(&view->buffer[terminal->columns * start], &view->buffer[terminal->columns * start_plus_1], sizeof(buffer_char_t) * terminal->columns * (end - start));
     memset(&view->buffer[terminal->columns * max(end - 1 , 0)], 0, sizeof(buffer_char_t) * terminal->columns);
@@ -571,7 +571,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         view->cursor_y = 0;
         if (seq[semicolon] == ';') {
           view->scrolling_region_start = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1);
-          view->scrolling_region_end = min(max(parse_number(&seq[semicolon+1], 1), 0), terminal->lines - 1);
+          view->scrolling_region_end = min(max(parse_number(&seq[semicolon+1], 1), 0), terminal->lines);
         }
       } break;
       default: unhandled = 1; break;
@@ -919,7 +919,7 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
     terminal->views[i].cursor_y = min(terminal->views[i].cursor_y, lines - 1);
     if (terminal->views[i].scrolling_region_end != -1 || terminal->views[i].scrolling_region_end != -1) {
       terminal->views[i].scrolling_region_start = min(terminal->views[i].scrolling_region_start, lines - 1);
-      terminal->views[i].scrolling_region_end = min(terminal->views[i].scrolling_region_end, lines - 1);
+      terminal->views[i].scrolling_region_end = min(terminal->views[i].scrolling_region_end, lines);
     }
   }
   terminal->columns = columns;
