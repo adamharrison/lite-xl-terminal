@@ -164,8 +164,7 @@ function TerminalView:draw()
 
     local y = self.position.y + self.options.padding.y
     local lh = self.options.font:get_height()
-    local should_redraw = self.terminal:update()
-    if should_redraw then core.redraw = true end
+    core.redraw = self.terminal:update() or core.redraw
     for line_idx, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + self.options.padding.x
       local should_draw_cursor = false
@@ -293,6 +292,7 @@ function TerminalView:on_text_input(text)
   if self.terminal then
     self.terminal:input(text)
     if self.terminal:scrollback() ~= 0 then self.terminal:scrollback(0) end
+    self.terminal:update()
     core.redraw = true
     return true
   end
