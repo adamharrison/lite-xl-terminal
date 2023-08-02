@@ -322,7 +322,7 @@ end, {
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
   ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOM" or core.active_view.options.newline) end,
-  ["terminal:scroll"] = function(cmd, amount)
+  ["terminal:scroll"] = function(amount)
     local tv = core.active_view
     if tv.terminal:mouse_tracking_mode() then
       local col, row = tv:convert_coordinates(tv.mouse_x, tv.mouse_y)
