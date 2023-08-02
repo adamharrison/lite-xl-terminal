@@ -594,29 +594,30 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 47 : target_foreground = 0; target_color = view->palette[7]; break;
                 case 48 : state = DISPLAY_STATE_COLOR_MODE; foreground = 0; break;
                 case 49 : target_foreground = 0; target_color = UNSET_COLOR; break;
-                case 90 : target_foreground = 1; target_color = view->palette[251]; break;
-                case 91 : target_foreground = 1; target_color = view->palette[160]; break;
-                case 92 : target_foreground = 1; target_color = view->palette[119]; break;
-                case 93 : target_foreground = 1; target_color = view->palette[226]; break;
-                case 94 : target_foreground = 1; target_color = view->palette[81]; break;
-                case 95 : target_foreground = 1; target_color = view->palette[201]; break;
-                case 96 : target_foreground = 1; target_color = view->palette[51]; break;
-                case 97 : target_foreground = 1; target_color = view->palette[231]; break;
-                case 100: target_foreground = 0; target_color = view->palette[251]; break;
-                case 101: target_foreground = 0; target_color = view->palette[160]; break;
-                case 102: target_foreground = 0; target_color = view->palette[119]; break;
-                case 103: target_foreground = 0; target_color = view->palette[226]; break;
-                case 104: target_foreground = 0; target_color = view->palette[81]; break;
-                case 105: target_foreground = 0; target_color = view->palette[201]; break;
-                case 106: target_foreground = 0; target_color = view->palette[51]; break;
-                case 107: target_foreground = 0; target_color = view->palette[231]; break;
+                case 90 : target_foreground = 1; target_color = view->palette[8]; break;
+                case 91 : target_foreground = 1; target_color = view->palette[9]; break;
+                case 92 : target_foreground = 1; target_color = view->palette[10]; break;
+                case 93 : target_foreground = 1; target_color = view->palette[11]; break;
+                case 94 : target_foreground = 1; target_color = view->palette[12]; break;
+                case 95 : target_foreground = 1; target_color = view->palette[13]; break;
+                case 96 : target_foreground = 1; target_color = view->palette[14]; break;
+                case 97 : target_foreground = 1; target_color = view->palette[15]; break;
+                case 100: target_foreground = 0; target_color = view->palette[8]; break;
+                case 101: target_foreground = 0; target_color = view->palette[9]; break;
+                case 102: target_foreground = 0; target_color = view->palette[10]; break;
+                case 103: target_foreground = 0; target_color = view->palette[11]; break;
+                case 104: target_foreground = 0; target_color = view->palette[12]; break;
+                case 105: target_foreground = 0; target_color = view->palette[13]; break;
+                case 106: target_foreground = 0; target_color = view->palette[14]; break;
+                case 107: target_foreground = 0; target_color = view->palette[15]; break;
                 default: unhandled = 1; break;
               }
             } break;
             case DISPLAY_STATE_COLOR_MODE: state = parse_number(&seq[offset], 0) != 5 ? DISPLAY_STATE_COLOR_VALUE_R : DISPLAY_STATE_COLOR_VALUE_IDX; break;
             case DISPLAY_STATE_COLOR_VALUE_IDX:
               target_foreground = foreground;
-              target_color = view->palette[(parse_number(&seq[offset], 0) & 0xFF)];
+              int idx = (parse_number(&seq[offset], 0) & 0xFF);
+              target_color = view->palette[idx];
               state = DISPLAY_STATE_NONE;
             break;
             case DISPLAY_STATE_COLOR_VALUE_R: r = (parse_number(&seq[offset], 0) & 0xFF); state = DISPLAY_STATE_COLOR_VALUE_G; break;
@@ -1314,7 +1315,7 @@ static int f_terminal_focused(lua_State* L) {
   return 0;
 }
 
-static int f_terminal_pastemode(lua_State* L) {
+static int f_terminal_paste_mode(lua_State* L) {
   terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
   lua_pushstring(L, terminal->paste_mode == PASTE_BRACKETED ? "bracketed" : "normal");
   return 1;
@@ -1354,7 +1355,7 @@ static const luaL_Reg terminal_api[] = {
   { "mouse_tracking_mode", f_terminal_mouse_tracking_mode    },
   { "cursor_keys_mode",    f_terminal_cursor_keys_mode       },
   { "keypad_keys_mode",    f_terminal_keypad_keys_mode       },
-  { "pastemode",           f_terminal_pastemode              },
+  { "paste_mode",          f_terminal_paste_mode              },
   { "scrollback",          f_terminal_scrollback             },
   { "name",                f_terminal_name                   },
   { NULL,                  NULL                              }
