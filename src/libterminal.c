@@ -556,20 +556,23 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 4  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_UNDERLINE; break;
                 case 27:
                 case 7  : {
-                  view->cursor_styling_inversed = display_number == 7;
-                  color_t background = view->cursor_styling.background;
-                  if (view->cursor_styling.foreground.value == UNSET_COLOR.value)
-                    view->cursor_styling.background = INVERSE_COLOR;
-                  else if (view->cursor_styling.foreground.value == INVERSE_COLOR.value)
-                    view->cursor_styling.background = UNSET_COLOR;
-                  else
-                    view->cursor_styling.background = view->cursor_styling.foreground;
-                  if (background.value == UNSET_COLOR.value)
-                    view->cursor_styling.foreground = INVERSE_COLOR;
-                  else if (background.value == INVERSE_COLOR.value)
-                    view->cursor_styling.foreground = UNSET_COLOR;
-                  else
-                    view->cursor_styling.foreground = view->cursor_styling.background;
+                  int is_inversed = display_number == 7;
+                  if (is_inversed != view->cursor_styling_inversed) {
+                    view->cursor_styling_inversed = is_inversed;
+                    color_t background = view->cursor_styling.background;
+                    if (view->cursor_styling.foreground.value == UNSET_COLOR.value)
+                      view->cursor_styling.background = INVERSE_COLOR;
+                    else if (view->cursor_styling.foreground.value == INVERSE_COLOR.value)
+                      view->cursor_styling.background = UNSET_COLOR;
+                    else
+                      view->cursor_styling.background = view->cursor_styling.foreground;
+                    if (background.value == UNSET_COLOR.value)
+                      view->cursor_styling.foreground = INVERSE_COLOR;
+                    else if (background.value == INVERSE_COLOR.value)
+                      view->cursor_styling.foreground = UNSET_COLOR;
+                    else
+                      view->cursor_styling.foreground = view->cursor_styling.background;
+                  }
                 } break;
                 case 30 : target_foreground = 1; target_color = view->palette[0]; break;
                 case 31 : target_foreground = 1; target_color = view->palette[1]; break;
