@@ -415,7 +415,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_x = max(min(parse_number(&seq[semicolon+1], 1) - 1, terminal->columns - 1), 0);
         }
       } break;
-      case 'J': { // TODO: Check
+      case 'J': {
         switch (seq[2]) {
           case '1':
             for (int y = 0; y <= view->cursor_y; ++y) {
