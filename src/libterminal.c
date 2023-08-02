@@ -547,14 +547,16 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           color_t target_color = UNTARGETED_COLOR;
           int target_foreground = 0;
           switch (state) {
-            case DISPLAY_STATE_NONE:
-              switch (parse_number(&seq[offset], 0)) {
+            case DISPLAY_STATE_NONE: {
+              int display_number = parse_number(&seq[offset], 0);
+              switch (display_number) {
                 case 0  : view->cursor_styling = LIBTERMINAL_NO_STYLING; break;
                 case 1  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_BOLD; break;
                 case 3  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_ITALIC; break;
                 case 4  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_UNDERLINE; break;
+                case 27:
                 case 7  : {
-                  view->cursor_styling_inversed = 1;
+                  view->cursor_styling_inversed = display_number == 7;
                   color_t background = view->cursor_styling.background;
                   if (view->cursor_styling.foreground.value == UNSET_COLOR.value)
                     view->cursor_styling.background = INVERSE_COLOR;
@@ -607,7 +609,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
                 case 107: target_foreground = 0; target_color = view->palette[231]; break;
                 default: unhandled = 1; break;
               }
-            break;
+            } break;
             case DISPLAY_STATE_COLOR_MODE: state = parse_number(&seq[offset], 0) != 5 ? DISPLAY_STATE_COLOR_VALUE_R : DISPLAY_STATE_COLOR_VALUE_IDX; break;
             case DISPLAY_STATE_COLOR_VALUE_IDX:
               target_foreground = foreground;
