@@ -476,7 +476,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       case 'X': {
         int length = parse_number(&seq[2], 1);
         for (int i = view->cursor_x; i < view->cursor_x + length && i < terminal->columns; ++i)
-          view->buffer[view->cursor_y * terminal->columns + i].codepoint = ' ';
+          view->buffer[view->cursor_y * terminal->columns + i] = (buffer_char_t){ view->cursor_styling, ' ' };
       } break;
       case 'b': {
         int length = parse_number(&seq[2], 1);
@@ -550,7 +550,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             case DISPLAY_STATE_NONE: {
               int display_number = parse_number(&seq[offset], 0);
               switch (display_number) {
-                case 0  : view->cursor_styling = LIBTERMINAL_NO_STYLING; break;
+                case 0  : view->cursor_styling = LIBTERMINAL_NO_STYLING; view->cursor_styling_inversed = 0; break;
                 case 1  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_BOLD; break;
                 case 3  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_ITALIC; break;
                 case 4  : view->cursor_styling.foreground.attributes |= ATTRIBUTE_UNDERLINE; break;
