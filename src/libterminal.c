@@ -157,6 +157,7 @@ typedef struct view_t {
   mouse_tracking_mode_e mouse_tracking_mode;
   color_t palette[256];                // Custom palette as per the ^][4;#;rgb:24/04/3C command. The fuck?
   charset_e charset;
+  int last_graphical_character; // for CSI b
   int tab_size;
   // The index of where the scrolling region starts/ends.
   // If enabled, disables shuffling of text to the scrollback
@@ -414,11 +415,11 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->cursor_x = max(min(parse_number(&seq[semicolon+1], 1) - 1, terminal->columns - 1), 0);
         }
       } break;
-      case 'J':  {
+      case 'J': { // TODO: Check
         switch (seq[2]) {
           case '1':
-            for (int y = 0; y < view->cursor_y; ++y) {
-              int w = y == view->cursor_y - 1 ? view->cursor_x : terminal->columns;
+            for (int y = 0; y <= view->cursor_y; ++y) {
+              int w = y == view->cursor_y ? (view->cursor_x+1) : terminal->columns;
               memset(&view->buffer[terminal->columns * y], 0, sizeof(buffer_char_t) * w);
             }
           break;
@@ -479,10 +480,10 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           view->buffer[view->cursor_y * terminal->columns + i] = (buffer_char_t){ view->cursor_styling, ' ' };
       } break;
       case 'b': {
-        int length = parse_number(&seq[2], 1);
-        if (view->cursor_x > 0) {
-          for (int i = view->cursor_x - 1; i < min(view->cursor_x + length, terminal->columns); ++i)
-            view->buffer[view->cursor_y * terminal->columns + i].codepoint = view->buffer[view->cursor_y * terminal->columns + view->cursor_x].codepoint;
+        if (view->last_graphical_character) {
+          int length = parse_number(&seq[2], 1);
+          for (int i = view->cursor_x; i < min(view->cursor_x + length, terminal->columns); ++i)
+            view->buffer[view->cursor_y * terminal->columns + i].codepoint = view->last_graphical_character;
         }
       } break;
       case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1); break;
@@ -821,6 +822,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
       ) {
         terminal->buffered_sequence[buffered_sequence_index++] = 0;
         terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence);
+        view->last_graphical_character = 0;
         view = &terminal->views[terminal->current_view];
         buffered_sequence_index = 0;
         terminal->buffered_sequence[0] = 0;
@@ -838,6 +840,8 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
     } else {
       int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
       offset += utf8_to_codepoint(&str[offset], &codepoint);
+      if (codepoint != '\e')
+        view->last_graphical_character = 0;
       switch (codepoint) {
         case 0x00:
         case 0x01:
@@ -899,7 +903,9 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             else
               terminal_shift_buffer(terminal);
           }
-          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, translate_charset(view->charset, codepoint) };
+          codepoint = translate_charset(view->charset, codepoint);
+          view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
+          view->last_graphical_character = codepoint;
           view->cursor_x++;
         break;
       }
