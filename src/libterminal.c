@@ -396,13 +396,13 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
         for (int i = view->cursor_x; i < min(view->cursor_x + length, terminal->columns); ++i)
           view->buffer[terminal->columns * view->cursor_y + i].codepoint = ' ';
       } break;
-      case 'A': view->cursor_y = max(view->cursor_y - parse_number(&seq[2], 1), 0);     break;
-      case 'B': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); break;
-      case 'C': view->cursor_x = min(view->cursor_x + parse_number(&seq[2], 1), terminal->columns - 1); break;
-      case 'D': view->cursor_x = max(view->cursor_x - parse_number(&seq[2], 1), 0); break;
-      case 'E': view->cursor_y = min(view->cursor_y + parse_number(&seq[2], 1), terminal->lines - 1); view->cursor_x = 0; break;
-      case 'F': view->cursor_y = min(view->cursor_y - parse_number(&seq[2], 1), 0); view->cursor_x = 0; break;
-      case 'G': view->cursor_x = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->columns - 1); break;
+      case 'A': view->cursor_y = max(view->cursor_y - max(parse_number(&seq[2], 1), 1), 0);     break;
+      case 'B': view->cursor_y = min(view->cursor_y + max(parse_number(&seq[2], 1), 1), terminal->lines - 1); break;
+      case 'C': view->cursor_x = min(view->cursor_x + max(parse_number(&seq[2], 1), 1), terminal->columns - 1); break;
+      case 'D': view->cursor_x = max(view->cursor_x - max(parse_number(&seq[2], 1), 1), 0); break;
+      case 'E': view->cursor_y = min(view->cursor_y + max(parse_number(&seq[2], 1), 1), terminal->lines - 1); view->cursor_x = 0; break;
+      case 'F': view->cursor_y = min(view->cursor_y - max(parse_number(&seq[2], 1), 1), 0); view->cursor_x = 0; break;
+      case 'G': view->cursor_x = min(max(max(parse_number(&seq[2], 1), 1) - 1, 0), terminal->columns - 1); break;
       case 'f':
       case 'H': {
         int semicolon = -1;
@@ -486,7 +486,10 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             view->buffer[view->cursor_y * terminal->columns + i].codepoint = view->last_graphical_character;
         }
       } break;
-      case 'd': view->cursor_y = min(max(parse_number(&seq[2], 1) - 1, 0), terminal->lines - 1); break;
+      case 'c': {
+        terminal_input(terminal, "\e[?1;2c", 7);
+      } break;
+      case 'd': view->cursor_y = min(max(max(parse_number(&seq[2], 1), 1) - 1, 0), terminal->lines - 1); break;
       case 'h': {
         if (seq[2] == '?') {
           const char* next = &seq[3];
@@ -504,7 +507,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
               case 2004: terminal->paste_mode = PASTE_BRACKETED; break;
               default: unhandled = 1; break;
             }
-            if (next = strstr(next, ";"))
+            if ((next = strstr(next, ";")))
               next++;
           }
         }
@@ -682,6 +685,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
     }
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
     switch (seq[1]) {
+      case 'D': view->cursor_y = min(view->cursor_y + 1, terminal->lines - 1); break;
+      case 'E': view->cursor_y = min(view->cursor_y + 1, terminal->lines - 1); view->cursor_x = 0; break;
       case '(':
         switch (seq[2]) {
           case '0': view->charset = CHARSET_DEC; break;
@@ -697,7 +702,6 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           memset(&view->buffer[0], 0, sizeof(buffer_char_t)*terminal->columns);
         } else {
           --view->cursor_y;
-          view->cursor_x = 0;
         }
       break;
       default: unhandled = 1; break;

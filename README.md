@@ -35,9 +35,8 @@ You can activate the terminal by either pressing `ctrl+t`, or running the `Termi
 
 ## Status
 
-Currently pre-release; but mostly complete. Use at your own risk.
-
-Target release date is August 1st, 2023.
+Currently pre-release; but mostly complete. Some small issues remain. Please feel free to post
+issues if you find something; but should work in most cases.
 
 ### Supported Shells
 
