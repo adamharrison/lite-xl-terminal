@@ -685,6 +685,17 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
     }
   } else if (type == ESCAPE_TYPE_FIXED_WIDTH) {
     switch (seq[1]) {
+      case '#': { // Put in, to satisfy vttest.
+        switch (seq[2]) {
+          case '8':
+            for (int y = 0; y < terminal->lines; ++y) {
+              for (int x = 0; x < terminal->columns; ++x)
+                view->buffer[y * terminal->columns + x] = (buffer_char_t){ view->cursor_styling, 'E' };
+            }
+          break;
+          default: unhandled = 1; break;
+        }
+      } break;
       case 'D': view->cursor_y = min(view->cursor_y + 1, terminal->lines - 1); break;
       case 'E': view->cursor_y = min(view->cursor_y + 1, terminal->lines - 1); view->cursor_x = 0; break;
       case '(':
