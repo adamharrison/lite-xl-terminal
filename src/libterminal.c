@@ -950,13 +950,15 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   }
 #endif
 
-static int terminal_update(terminal_t* terminal) {
+static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, void*), void* data) {
   char chunk[LIBTERMINAL_CHUNK_SIZE];
   int len, at_least_one = 0;
   #ifdef _WIN32
     WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
     if (terminal->nonblocking_buffer_length > 0) {
       terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length);
+      if (callback)
+        callback(chunk, terminal->nonblocking_buffer_length, data);
       at_least_one = 1;
     }
     terminal->nonblocking_buffer_length = 0;
@@ -968,6 +970,8 @@ static int terminal_update(terminal_t* terminal) {
       if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return at_least_one;
       terminal_output(terminal, chunk, len);
+      if (callback)
+        callback(chunk, len, data);
       at_least_one = 1;
     } while (len > 0);
   #endif
@@ -1170,8 +1174,15 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
 }
 
 
+static terminal_t* lua_toterminal(lua_State* L, int index) {
+  lua_getfield(L, index, "__terminal");
+  terminal_t* terminal = (terminal_t*)lua_touserdata(L, -1);
+  lua_pop(L, 1);
+  return terminal;
+}
+
 static int f_terminal_lines(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   lua_newtable(L);
 
   int total_lines = 0;
@@ -1232,24 +1243,35 @@ static int f_terminal_new(lua_State* L) {
     free(arguments[i]);
   if (!terminal)
     return luaL_error(L, "error creating terminal");
-  terminal_t** pointer = lua_newuserdata(L, sizeof(terminal_t*));
-  *pointer = terminal;
+  lua_newtable(L);
+  lua_pushlightuserdata(L, terminal);
+  lua_setfield(L, -2, "__terminal");
   luaL_setmetatable(L, "libterminal");
   return 1;
 }
 
+
 static int f_terminal_gc(lua_State* L) {
-  terminal_free(*(terminal_t**)lua_touserdata(L, 1));
+  terminal_free(lua_toterminal(L, 1));
   return 0;
 }
 
 static int f_terminal_close(lua_State* L) {
-  lua_pushinteger(L, terminal_close(*(terminal_t**)lua_touserdata(L, 1)));
+  lua_pushinteger(L, terminal_close(lua_toterminal(L, 1)));
   return 1;
 }
 
+static void chunk_update(char* buf, int len, void* L) {
+  lua_pushvalue(L, 2);
+  lua_pushlstring(L, buf, len);
+  lua_call(L, 1, 0);
+}
 static int f_terminal_update(lua_State* L){
-  int status = terminal_update(*(terminal_t**)lua_touserdata(L, 1));
+  int status;
+  if (lua_type(L, 2) == LUA_TFUNCTION)
+    status = terminal_update(lua_toterminal(L, 1), chunk_update, L);
+  else
+    status = terminal_update(lua_toterminal(L, 1), NULL, NULL);
   lua_pushboolean(L, status != 0);
   return 1;
 }
@@ -1257,12 +1279,12 @@ static int f_terminal_update(lua_State* L){
 static int f_terminal_input(lua_State* L) {
   size_t len;
   const char* str = luaL_checklstring(L, 2, &len);
-  terminal_input(*(terminal_t**)lua_touserdata(L, 1), str, (int)len);
+  terminal_input(lua_toterminal(L, 1), str, (int)len);
   return f_terminal_update(L);
 }
 
 static int f_terminal_size(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   if (lua_gettop(L) > 1) {
     int x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
     terminal_resize(terminal, x, y);
@@ -1274,7 +1296,7 @@ static int f_terminal_size(lua_State* L) {
 
 
 static int f_terminal_exited(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   #if _WIN32
     DWORD exit_code;
     if (GetExitCodeProcess(terminal->process_information.hProcess, &exit_code) && exit_code != STILL_ACTIVE) {
@@ -1292,7 +1314,7 @@ static int f_terminal_exited(lua_State* L) {
 }
 
 static int f_terminal_cursor(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_x);
   lua_pushinteger(L, terminal->views[terminal->current_view].cursor_y);
   switch (terminal->views[terminal->current_view].cursor_mode) {
@@ -1304,7 +1326,7 @@ static int f_terminal_cursor(lua_State* L) {
 }
 
 static int f_terminal_cursor_keys_mode(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   switch (terminal->views[terminal->current_view].cursor_keys_mode) {
     case KEYS_MODE_NORMAL: lua_pushliteral(L, "normal"); break;
     case KEYS_MODE_APPLICATION: lua_pushliteral(L, "application"); break;
@@ -1313,7 +1335,7 @@ static int f_terminal_cursor_keys_mode(lua_State* L) {
 }
 
 static int f_terminal_keypad_keys_mode(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   switch (terminal->views[terminal->current_view].keypad_keys_mode) {
     case KEYS_MODE_NORMAL: lua_pushliteral(L, "normal"); break;
     case KEYS_MODE_APPLICATION: lua_pushliteral(L, "application"); break;
@@ -1322,7 +1344,7 @@ static int f_terminal_keypad_keys_mode(lua_State* L) {
 }
 
 static int f_terminal_scrollback(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   if (lua_gettop(L) >= 2)
     terminal_scrollback(terminal, luaL_checkinteger(L, 2));
   lua_pushinteger(L, terminal->scrollback_position);
@@ -1330,20 +1352,20 @@ static int f_terminal_scrollback(lua_State* L) {
 }
 
 static int f_terminal_focused(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   if (terminal->reporting_focus)
     terminal_input(terminal, lua_toboolean(L, 2) ? "\x1B[" : "\x1B[O", 3);
   return 0;
 }
 
 static int f_terminal_paste_mode(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   lua_pushstring(L, terminal->paste_mode == PASTE_BRACKETED ? "bracketed" : "normal");
   return 1;
 }
 
 static int f_terminal_name(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   if (terminal->name[0])
     lua_pushstring(L, terminal->name);
   else
@@ -1352,7 +1374,7 @@ static int f_terminal_name(lua_State* L) {
 }
 
 static int f_terminal_mouse_tracking_mode(lua_State* L) {
-  terminal_t* terminal = *(terminal_t**)lua_touserdata(L, 1);
+  terminal_t* terminal = lua_toterminal(L, 1);
   switch (terminal->views[terminal->current_view].mouse_tracking_mode) {
     case MOUSE_TRACKING_NONE: lua_pushnil(L); break;
     case MOUSE_TRACKING_X10: lua_pushliteral(L, "x10"); break;

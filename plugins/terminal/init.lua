@@ -100,6 +100,17 @@ function TerminalView:new(options)
   self.focused = false
 end
 
+function TerminalView:spawn()
+  self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
+  self.routine = self.routine or core.add_thread(function()
+    while self.terminal do
+      if self.terminal:update() then
+        core.redraw = true
+      end
+      coroutine.yield(1 / config.fps)
+    end
+  end)
+end
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
@@ -107,15 +118,7 @@ function TerminalView:update()
     self.lines = math.max(math.floor((self.size.y - self.options.padding.y*2) / self.options.font:get_height()), 1)
     if self.lines > 0 and self.columns > 0 then
       if not self.terminal then
-        self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
-        self.routine = self.routine or core.add_thread(function()
-          while self.terminal do
-            if self.terminal:update() then
-              core.redraw = true
-            end
-            coroutine.yield(1 / config.fps)
-          end
-        end)
+        self:spawn()
       else
         self.terminal:size(self.columns, self.lines)
         self.last_size = { x = self.size.x, y = self.size.y }
