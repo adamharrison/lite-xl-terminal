@@ -316,95 +316,94 @@ function TerminalView:on_text_input(text)
   end
 end
 
-command.add(function()
+command.add(function(amount)
   local view = core.root_view.overlapping_view or core.active_view
-  return view and view:is(TerminalView)
+  return (view and view:is(TerminalView)), view, amount
 end, {
-  ["terminal:scroll"] = function(amount, ...)
-    local tv = core.root_view.overlapping_view or core.active_view
-    if tv.terminal:mouse_tracking_mode() then
-      local col, row = tv:convert_coordinates(tv.mouse_x, tv.mouse_y)
-      if tv.terminal:mouse_tracking_mode() == "normal" then
-        tv.terminal:input("\x1B[M" .. string.char(amount > 0 and 64 or 65) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-      elseif tv.terminal:mouse_tracking_mode() == "sgr" then
-        tv.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
+  ["terminal:scroll"] = function(view, amount)
+    if view.terminal:mouse_tracking_mode() then
+      local col, row = view:convert_coordinates(view.mouse_x, view.mouse_y)
+      if view.terminal:mouse_tracking_mode() == "normal" then
+        view.terminal:input("\x1B[M" .. string.char(amount > 0 and 64 or 65) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+      elseif view.terminal:mouse_tracking_mode() == "sgr" then
+        view.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
       end
     else
-      tv.terminal:scrollback(tv.terminal:scrollback() + (amount or 1))
+      view.terminal:scrollback(view.terminal:scrollback() + (amount or 1))
     end
   end
 })
 command.add(function()
-  return core.active_view:is(TerminalView) and core.active_view.terminal
+  return (core.active_view:is(TerminalView) and core.active_view.terminal), core.active_view
 end, {
-  ["terminal:backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace) end,
-  ["terminal:ctrl-backspace"] = function() core.active_view.terminal:input(core.active_view.options.backspace == "\b" and "\x7F" or "\b") end,
-  ["terminal:alt-backspace"] = function() core.active_view.terminal:input("\x1B" .. core.active_view.options.backspace) end,
-  ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
-  ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
-  ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOM" or core.active_view.options.newline) end,
-  ["terminal:break"] = function() core.active_view.terminal:input("\x03") end,
-  ["terminal:eof"] = function() core.active_view.terminal:input("\x04") end,
-  ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
-  ["terminal:tab"] = function() core.active_view.terminal:input("\t") end,
-  ["terminal:paste"] = function()
-    if core.active_view.terminal:paste_mode() == "bracketed" then
-      core.active_view.terminal:input("\x1B[200~" .. system.get_clipboard() .. "\x1B[201~")
+  ["terminal:backspace"] = function(view) view.terminal:input(view.options.backspace) end,
+  ["terminal:ctrl-backspace"] = function(view) view.terminal:input(view.options.backspace == "\b" and "\x7F" or "\b") end,
+  ["terminal:alt-backspace"] = function(view) view.terminal:input("\x1B" .. view.options.backspace) end,
+  ["terminal:insert"] = function(view) view.terminal:input("\x1B[2~") end,
+  ["terminal:delete"] = function(view) view.terminal:input(view.options.delete) end,
+  ["terminal:return"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOM" or view.options.newline) end,
+  ["terminal:break"] = function(view) view.terminal:input("\x03") end,
+  ["terminal:eof"] = function(view) view.terminal:input("\x04") end,
+  ["terminal:suspend"] = function(view) view.terminal:input("\x1A") end,
+  ["terminal:tab"] = function(view) view.terminal:input("\t") end,
+  ["terminal:paste"] = function(view)
+    if view.terminal:paste_mode() == "bracketed" then
+      view.terminal:input("\x1B[200~" .. system.get_clipboard() .. "\x1B[201~")
     else
-      core.active_view.terminal:input(system.get_clipboard())
+      view.terminal:input(system.get_clipboard())
     end
   end,
-  ["terminal:page-up"] = function() core.active_view.terminal:input("\x1B[5~") end,
-  ["terminal:page-down"] = function() core.active_view.terminal:input("\x1B[6~") end,
-  ["terminal:scroll-up"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() + core.active_view.lines) end,
-  ["terminal:scroll-down"] = function() view.terminal:scrollback(core.active_view.terminal:scrollback() - core.active_view.lines) end,
-  ["terminal:scroll-to-end"] = function() view.terminal:scrollback(0) end,
-  ["terminal:scroll-to-top"] = function() view.terminal:scrollback(core.active_view.options.scrollback_limit) end,
-  ["terminal:up"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOA" or "\x1B[A") end,
-  ["terminal:down"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOB" or "\x1B[B") end,
-  ["terminal:left"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOD" or "\x1B[D") end,
-  ["terminal:right"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOC" or "\x1B[C") end,
-  ["terminal:jump-up"] = function() core.active_view.terminal:input("\x1B[1;5A") end,
-  ["terminal:jump-down"] = function() core.active_view.terminal:input("\x1B[1;5B") end,
-  ["terminal:jump-right"] = function() core.active_view.terminal:input("\x1B[1;5C") end,
-  ["terminal:jump-left"] = function() core.active_view.terminal:input("\x1B[1;5D") end,
-  ["terminal:home"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOH" or "\x1B[H") end,
-  ["terminal:end"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOF" or "\x1B[F") end,
-  ["terminal:f1"]  = function() core.active_view.terminal:input("\x1BOP") end,
-  ["terminal:f2"]  = function() core.active_view.terminal:input("\x1BOQ") end,
-  ["terminal:f3"]  = function() core.active_view.terminal:input("\x1BOR") end,
-  ["terminal:f4"]  = function() core.active_view.terminal:input("\x1BOS") end,
-  ["terminal:f5"]  = function() core.active_view.terminal:input("\x1B[15~") end,
-  ["terminal:f6"]  = function() core.active_view.terminal:input("\x1B[17~") end,
-  ["terminal:f7"]  = function() core.active_view.terminal:input("\x1B[18~") end,
-  ["terminal:f8"]  = function() core.active_view.terminal:input("\x1B[19~") end,
-  ["terminal:f9"]  = function() core.active_view.terminal:input("\x1B[20~") end,
-  ["terminal:f10"]  = function() core.active_view.terminal:input("\x1B[21~") end,
-  ["terminal:f11"]  = function() core.active_view.terminal:input("\x1B[23~") end,
-  ["terminal:f12"]  = function() core.active_view.terminal:input("\x1B[24~") end,
-  ["terminal:escape"]  = function() core.active_view.terminal:input("\x1B") end,
-  ["terminal:start"] = function() core.active_view.terminal:input("\x13") end,
-  ["terminal:stop"] = function() core.active_view.terminal:input("\x11") end,
-  ["terminal:cancel"] = function() core.active_view.terminal:input("\x18") end,
-  ["terminal:start-of-heading"] = function() core.active_view.terminal:input("\x01") end,
-  ["terminal:start-of-text"] = function() core.active_view.terminal:input("\x02") end,
-  ["terminal:enquiry"] = function() core.active_view.terminal:input("\x05") end,
-  ["terminal:acknowledge"] = function() core.active_view.terminal:input("\x06") end,
-  ["terminal:bell"] = function() core.active_view.terminal:input("\x07") end,
-  ["terminal:vertical-tab"] = function() core.active_view.terminal:input("\x0B") end,
-  ["terminal:redraw"] = function() core.active_view.terminal:input("\0C") end,
-  ["terminal:carriage-feed"] = function() core.active_view.terminal:input("\x0D") end,
-  ["terminal:shift-out"] = function() core.active_view.terminal:input("\x0E") end,
-  ["terminal:shift-in"] = function() core.active_view.terminal:input("\x0F") end,
-  ["terminal:data-line-escape"] = function() core.active_view.terminal:input("\x10") end,
-  ["terminal:history"] = function() core.active_view.terminal:input("\x12") end,
-  ["terminal:transpose"] = function() core.active_view.terminal:input("\x14") end,
-  ["terminal:negative-acknowledge"] = function() core.active_view.terminal:input("\x15") end,
-  ["terminal:synchronous-idel"] = function() core.active_view.terminal:input("\x16") end,
-  ["terminal:end-of-transmission-block"] = function() core.active_view.terminal:input("\x17") end,
-  ["terminal:end-of-medium"] = function() core.active_view.terminal:input("\x19") end,
-  ["terminal:file-separator"] = function() core.active_view.terminal:input("\x1C") end,
-  ["terminal:group-separator"] = function() core.active_view.terminal:input("\x1D") end
+  ["terminal:page-up"] = function(view) view.terminal:input("\x1B[5~") end,
+  ["terminal:page-down"] = function(view) view.terminal:input("\x1B[6~") end,
+  ["terminal:scroll-up"] = function(view) view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
+  ["terminal:scroll-down"] = function(view) view.terminal:scrollback(view.terminal:scrollback() - view.lines) end,
+  ["terminal:scroll-to-end"] = function(view) view.terminal:scrollback(0) end,
+  ["terminal:scroll-to-top"] = function(view) view.terminal:scrollback(view.options.scrollback_limit) end,
+  ["terminal:up"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOA" or "\x1B[A") end,
+  ["terminal:down"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOB" or "\x1B[B") end,
+  ["terminal:left"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOD" or "\x1B[D") end,
+  ["terminal:right"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOC" or "\x1B[C") end,
+  ["terminal:jump-up"] = function(view) view.terminal:input("\x1B[1;5A") end,
+  ["terminal:jump-down"] = function(view) view.terminal:input("\x1B[1;5B") end,
+  ["terminal:jump-right"] = function(view) view.terminal:input("\x1B[1;5C") end,
+  ["terminal:jump-left"] = function(view) view.terminal:input("\x1B[1;5D") end,
+  ["terminal:home"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOH" or "\x1B[H") end,
+  ["terminal:end"] = function(view) view.terminal:input(view.terminal:cursor_keys_mode() == "application" and "\x1BOF" or "\x1B[F") end,
+  ["terminal:f1"]  = function(view) view.terminal:input("\x1BOP") end,
+  ["terminal:f2"]  = function(view) view.terminal:input("\x1BOQ") end,
+  ["terminal:f3"]  = function(view) view.terminal:input("\x1BOR") end,
+  ["terminal:f4"]  = function(view) view.terminal:input("\x1BOS") end,
+  ["terminal:f5"]  = function(view) view.terminal:input("\x1B[15~") end,
+  ["terminal:f6"]  = function(view) view.terminal:input("\x1B[17~") end,
+  ["terminal:f7"]  = function(view) view.terminal:input("\x1B[18~") end,
+  ["terminal:f8"]  = function(view) view.terminal:input("\x1B[19~") end,
+  ["terminal:f9"]  = function(view) view.terminal:input("\x1B[20~") end,
+  ["terminal:f10"]  = function(view) view.terminal:input("\x1B[21~") end,
+  ["terminal:f11"]  = function(view) view.terminal:input("\x1B[23~") end,
+  ["terminal:f12"]  = function(view) view.terminal:input("\x1B[24~") end,
+  ["terminal:escape"]  = function(view) view.terminal:input("\x1B") end,
+  ["terminal:start"] = function(view) view.terminal:input("\x13") end,
+  ["terminal:stop"] = function(view) view.terminal:input("\x11") end,
+  ["terminal:cancel"] = function(view) view.terminal:input("\x18") end,
+  ["terminal:start-of-heading"] = function(view) view.terminal:input("\x01") end,
+  ["terminal:start-of-text"] = function(view) view.terminal:input("\x02") end,
+  ["terminal:enquiry"] = function(view) view.terminal:input("\x05") end,
+  ["terminal:acknowledge"] = function(view) view.terminal:input("\x06") end,
+  ["terminal:bell"] = function(view) view.terminal:input("\x07") end,
+  ["terminal:vertical-tab"] = function(view) view.terminal:input("\x0B") end,
+  ["terminal:redraw"] = function(view) view.terminal:input("\0C") end,
+  ["terminal:carriage-feed"] = function(view) view.terminal:input("\x0D") end,
+  ["terminal:shift-out"] = function(view) view.terminal:input("\x0E") end,
+  ["terminal:shift-in"] = function(view) view.terminal:input("\x0F") end,
+  ["terminal:data-line-escape"] = function(view) view.terminal:input("\x10") end,
+  ["terminal:history"] = function(view) view.terminal:input("\x12") end,
+  ["terminal:transpose"] = function(view) view.terminal:input("\x14") end,
+  ["terminal:negative-acknowledge"] = function(view) view.terminal:input("\x15") end,
+  ["terminal:synchronous-idel"] = function(view) view.terminal:input("\x16") end,
+  ["terminal:end-of-transmission-block"] = function(view) view.terminal:input("\x17") end,
+  ["terminal:end-of-medium"] = function(view) view.terminal:input("\x19") end,
+  ["terminal:file-separator"] = function(view) view.terminal:input("\x1C") end,
+  ["terminal:group-separator"] = function(view) view.terminal:input("\x1D") end
 });
 
 command.add(function()
@@ -491,6 +490,8 @@ core.status_view:add_item({
 
 keymap.add {
   ["return"] = "terminal:return",
+  ["ctrl+return"] = "terminal:return",
+  ["shift+return"] = "terminal:return",
   ["backspace"] = "terminal:backspace",
   ["shift+backspace"] = "terminal:backspace",
   ["delete"] = "terminal:delete",
