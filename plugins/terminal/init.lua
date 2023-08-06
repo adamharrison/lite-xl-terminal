@@ -293,6 +293,7 @@ function TerminalView:on_mouse_moved(x, y)
   end
 end
 
+
 function TerminalView:on_mouse_released(button, x, y)
   if button == "left" then
     self.pressing = false
@@ -315,7 +316,24 @@ function TerminalView:on_text_input(text)
   end
 end
 
-
+command.add(function()
+  local view = core.root_view.overlapping_view or core.active_view
+  return view and view:is(TerminalView)
+end, {
+  ["terminal:scroll"] = function(amount, ...)
+    local tv = core.root_view.overlapping_view or core.active_view
+    if tv.terminal:mouse_tracking_mode() then
+      local col, row = tv:convert_coordinates(tv.mouse_x, tv.mouse_y)
+      if tv.terminal:mouse_tracking_mode() == "normal" then
+        tv.terminal:input("\x1B[M" .. string.char(amount > 0 and 64 or 65) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
+      elseif tv.terminal:mouse_tracking_mode() == "sgr" then
+        tv.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
+      end
+    else
+      tv.terminal:scrollback(tv.terminal:scrollback() + (amount or 1))
+    end
+  end
+})
 command.add(function()
   return core.active_view:is(TerminalView) and core.active_view.terminal
 end, {
@@ -325,19 +343,6 @@ end, {
   ["terminal:insert"] = function() core.active_view.terminal:input("\x1B[2~") end,
   ["terminal:delete"] = function() core.active_view.terminal:input(core.active_view.options.delete) end,
   ["terminal:return"] = function() core.active_view.terminal:input(core.active_view.terminal:cursor_keys_mode() == "application" and "\x1BOM" or core.active_view.options.newline) end,
-  ["terminal:scroll"] = function(amount)
-    local tv = core.active_view
-    if tv.terminal:mouse_tracking_mode() then
-      local col, row = tv:convert_coordinates(tv.mouse_x, tv.mouse_y)
-      if tv.terminal:mouse_tracking_mode() == "normal" then
-        tv.terminal:input("\x1B[M" .. string.char(amount > 0 and 64 or 65) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-      elseif tv.terminal:mouse_tracking_mode() == "sgr" then
-        tv.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
-      end
-    else
-      tv.terminal:scrollback(core.active_view.terminal:scrollback() + (amount or 1))
-    end
-  end,
   ["terminal:break"] = function() core.active_view.terminal:input("\x03") end,
   ["terminal:eof"] = function() core.active_view.terminal:input("\x04") end,
   ["terminal:suspend"] = function() core.active_view.terminal:input("\x1A") end,
