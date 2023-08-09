@@ -397,7 +397,7 @@ end, {
   ["terminal:acknowledge"] = function(view) view:input("\x06") end,
   ["terminal:bell"] = function(view) view:input("\x07") end,
   ["terminal:vertical-tab"] = function(view) view:input("\x0B") end,
-  ["terminal:redraw"] = function(view) view:input("\0C") end,
+  ["terminal:redraw"] = function(view) view:input("\x0C") end,
   ["terminal:carriage-feed"] = function(view) view:input("\x0D") end,
   ["terminal:shift-out"] = function(view) view:input("\x0E") end,
   ["terminal:shift-in"] = function(view) view:input("\x0F") end,
