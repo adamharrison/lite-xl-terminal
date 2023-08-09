@@ -338,8 +338,9 @@ end, {
     end
   end
 })
-command.add(function()
-  return (core.active_view:is(TerminalView) and core.active_view.terminal), core.active_view
+
+command.add(function(...)
+  return (core.active_view:is(TerminalView) and core.active_view.terminal), core.active_view, ...
 end, {
   ["terminal:backspace"] = function(view) view:input(view.options.backspace) end,
   ["terminal:ctrl-backspace"] = function(view) view:input(view.options.backspace == "\b" and "\x7F" or "\b") end,
@@ -463,6 +464,7 @@ command.add(nil, {
   ["terminal:toggle"] = function()
     if not view then
       view = TerminalView(config.plugins.terminal)
+      core.terminal_view = view
       local node = core.root_view:get_active_node()
       view.node = node:split("down", view, { y = true }, true)
       core.set_active_view(view)
@@ -470,6 +472,16 @@ command.add(nil, {
       view.node:close_view(core.root_view.root_node, view)
       view.terminal:close()
       view = nil
+      core.terminal_view = nil
+    end
+  end,
+  ["terminal:execute"] = function(text)
+    if not view then command.perform("terminal:toggle") end
+    local target_view = core.active_view:is(TerminalView) and core.active_view or view
+    if not text then
+      core.command_view:enter("Execute Command", { submit = function(text) target_view:input(text .. target_view.options.newline) end })
+    else
+      target_view:input(text .. target_view.options.newline)
     end
   end
 })
