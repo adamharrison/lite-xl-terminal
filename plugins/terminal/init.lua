@@ -409,7 +409,8 @@ end, {
   ["terminal:end-of-transmission-block"] = function(view) view:input("\x17") end,
   ["terminal:end-of-medium"] = function(view) view:input("\x19") end,
   ["terminal:file-separator"] = function(view) view:input("\x1C") end,
-  ["terminal:group-separator"] = function(view) view:input("\x1D") end
+  ["terminal:group-separator"] = function(view) view:input("\x1D") end,
+  ["terminal:clear"] = function(view) view.terminal:clear() view:input(view.options.newline) end
 });
 
 command.add(function()
@@ -483,6 +484,11 @@ command.add(nil, {
     else
       target_view:input(text .. target_view.options.newline)
     end
+  end
+})
+command.add(function() return view and core.active_view ~= view end, {
+  ["terminal:focus"] = function()
+    core.set_active_view(view)
   end
 })
 

@@ -1373,6 +1373,15 @@ static int f_terminal_name(lua_State* L) {
   return 1;
 }
 
+static int f_terminal_clear(lua_State* L) {
+  terminal_t* terminal = lua_toterminal(L, 1);
+  terminal_clear_scrollback_buffer(terminal);
+  view_t* view = &terminal->views[terminal->current_view];
+  memset(view->buffer, 0, sizeof(buffer_char_t) * (terminal->columns * terminal->lines));
+  view->cursor_x = 0;
+  view->cursor_y = 0;
+}
+
 static int f_terminal_mouse_tracking_mode(lua_State* L) {
   terminal_t* terminal = lua_toterminal(L, 1);
   switch (terminal->views[terminal->current_view].mouse_tracking_mode) {
@@ -1389,6 +1398,7 @@ static const luaL_Reg terminal_api[] = {
   { "new",                 f_terminal_new                    },
   { "close",               f_terminal_close                  },
   { "input",               f_terminal_input                  },
+  { "clear",               f_terminal_clear                  },
   { "lines",               f_terminal_lines                  },
   { "size",                f_terminal_size                   },
   { "update",              f_terminal_update                 },
