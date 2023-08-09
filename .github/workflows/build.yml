@@ -58,6 +58,8 @@ jobs:
             gh release upload latest *.so
             git branch -f latest HEAD
             git tag -f latest
+            git tag -f continous
             git push -f origin refs/heads/latest
             git push -f origin refs/tags/latest
+            git push -f origin refs/tags/continous
           fi
