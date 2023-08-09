@@ -25,8 +25,8 @@ jobs:
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          git tag -f continous
-          git push -f origin refs/tags/continous
+          git tag -f continuous
+          git push -f origin refs/tags/continuous
           gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous *.so *.dll
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true;
