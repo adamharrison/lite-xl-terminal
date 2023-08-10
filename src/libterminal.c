@@ -988,16 +988,26 @@ static int terminal_close(terminal_t* terminal) {
   #if _WIN32
     if (terminal->nonblocking_thread)
       TerminateThread(terminal->nonblocking_thread, 0);
-    if (terminal->topty)
+    if (terminal->topty) {
       CloseHandle(terminal->topty);
-    if (terminal->frompty)
+      terminal->topty = NULL;
+    }
+    if (terminal->frompty) {
       CloseHandle(terminal->frompty);
-    if (terminal->hpcon)
+      terminal->frompty = NULL;
+    }
+    if (terminal->hpcon) {
       ClosePseudoConsole(terminal->hpcon);
-    if (terminal->nonblocking_buffer_mutex)
+      terminal->hpcon = NULL;
+    }
+    if (terminal->nonblocking_buffer_mutex) {
       CloseHandle(terminal->nonblocking_buffer_mutex);
-    if (terminal->process_information.hProcess)
+      terminal->nonblocking_buffer_mutex = NULL;
+    }
+    if (terminal->process_information.hProcess) {
       TerminateProcess(terminal->process_information.hProcess, 1);
+      terminal->process_information.hProcess = NULL;
+    }
   #else
     if (terminal->pid) {
       close(terminal->master);
