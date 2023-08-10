@@ -472,6 +472,7 @@ command.add(nil, {
     else
       view.node:close_view(core.root_view.root_node, view)
       view.terminal:close()
+      view.terminal = nil
       view = nil
       core.terminal_view = nil
     end
