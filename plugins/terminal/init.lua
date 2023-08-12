@@ -216,7 +216,7 @@ function TerminalView:draw()
       if self.selection then
         local terminal_width = self.size.x - self.options.padding.x * 2
         local sorted = { table.unpack(self.selection) }
-        if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
+        if sorted[2] > sorted[4] or (sorted[2] == sorted[4] and sorted[1] > sorted[3]) then
           sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
         end
         if idx == sorted[2] and idx == sorted[4] then
