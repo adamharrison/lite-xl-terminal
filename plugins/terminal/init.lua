@@ -175,6 +175,8 @@ function TerminalView:convert_color(int, target)
   return nil
 end
 
+local function usub(str, i, j) return str:sub(i, j) end
+
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
@@ -184,6 +186,16 @@ function TerminalView:draw()
     local y = self.position.y + self.options.padding.y
     local lh = self.options.font:get_height()
     core.redraw = self.terminal:update() or core.redraw
+
+
+    local selection = nil
+    if self.selection then
+      selection = { table.unpack(self.selection) }
+      if selection[2] > selection[4] or (selection[2] == selection[4] and selection[1] > selection[3]) then
+        selection = { selection[3], selection[4], selection[1], selection[2] }
+      end
+    end
+
     for line_idx, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + self.options.padding.x
       local should_draw_cursor = false
@@ -199,43 +211,35 @@ function TerminalView:draw()
       end
       local offset = 0
       for i = 1, #line, 2 do
-        local background, style = self:convert_color(line[i] & 0xFFFFFFFF, "background")
-        local text = line[i+1]
-        local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
-        local width = font:get_width(text)
-        if background and background ~= self.options.background then
-          renderer.draw_rect(x, y, width, lh, background)
-        end
-        x = x + width
-      end
-      x = self.position.x + self.options.padding.x
-      if should_draw_cursor then
-        renderer.draw_rect(x + cursor_x * space_width, y, space_width, lh, style.accent)
-      end
-      local idx = line_idx - 1
-      if self.selection then
-        local terminal_width = self.size.x - self.options.padding.x * 2
-        local sorted = { table.unpack(self.selection) }
-        if sorted[2] > sorted[4] or (sorted[2] == sorted[4] and sorted[1] > sorted[3]) then
-          sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
-        end
-        if idx == sorted[2] and idx == sorted[4] then
-          renderer.draw_rect(x + sorted[1] * space_width, y, (sorted[3] - sorted[1]) * space_width, lh, style.accent)
-        elseif idx == sorted[2] then
-          renderer.draw_rect(x + sorted[1] * space_width, y, terminal_width - (sorted[1] * space_width), lh, style.accent)
-        elseif idx > sorted[2] and idx < sorted[4] then
-          renderer.draw_rect(x, y, terminal_width, lh, style.accent)
-        elseif idx == sorted[4] then
-          renderer.draw_rect(x, y, space_width * sorted[3], lh, style.accent)
-        end
-      end
-      for i = 1, #line, 2 do
+        local background = self:convert_color(line[i] & 0xFFFFFFFF, "background")
         local foreground, style = self:convert_color(line[i] >> 32, "foreground")
-        local text = line[i+1]
         local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
-        local length = text:ulen()
-        x = renderer.draw_text(font, text, x, y, foreground)
+        local text = line[i+1]
+        local length = line[i+1]:ulen()
+        local idx = line_idx - 1
+        local sections
+        if selection then
+          if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] > offset + length))) then -- overlaps all
+            sections = { { foreground, background, text } }
+          elseif (idx == selection[2] and idx == selection[4] and selection[1] > offset and selection[3] < offset + length) then -- overlaps in middle
+            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
+          elseif (selection[2] < idx or (idx == selection[2] and selection[1] <= offset)) and (idx == selection[4] and selection[3] < offset + length and selection[3] >= offset) then -- overlaps start
+            sections = { { foreground, background, usub(text, 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
+          elseif (idx == selection[2] and selection[1] < offset + length and selection[1] >= offset) and (selection[4] > idx or (selection[4] == idx and selection[3] > offset + length)) then -- overlaps end
+            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, #text) } }
+          end
+        end
+        for i, section in ipairs(sections or { { background, foreground, text } }) do
+          local background, foreground, text = table.unpack(section)
+          if background and background ~= self.options.background then
+            renderer.draw_rect(x, y, text:ulen()*space_width, lh, background)
+          end
+          x = renderer.draw_text(font, text, x, y, foreground)
+        end
         offset = offset + length
+      end
+      if should_draw_cursor then
+        renderer.draw_rect(self.position.x + self.options.padding.x + cursor_x * space_width, y, space_width, lh, style.accent)
       end
       y = y + lh
     end
