@@ -100,11 +100,23 @@ function TerminalView:new(options)
   self.focused = false
 end
 
+function TerminalView:shift_selection_update()
+  local shifts = self.terminal:update()
+  if self.selection and shifts then
+    self.selection[2] = self.selection[2] - shifts
+    self.selection[4] = self.selection[4] - shifts
+    if math.abs(math.min(self.selection[2], self.selection[4])) > self.options.scrollback_limit then
+      self.selection = nil
+    end
+  end
+  return shifts
+end
+
 function TerminalView:spawn()
   self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
   self.routine = self.routine or core.add_thread(function()
     while self.terminal do
-      if self.terminal:update() then
+      if self:shift_selection_update() then
         core.redraw = true
       end
       coroutine.yield(1 / config.fps)
@@ -185,7 +197,7 @@ function TerminalView:draw()
 
     local y = self.position.y + self.options.padding.y
     local lh = self.options.font:get_height()
-    core.redraw = self.terminal:update() or core.redraw
+    core.redraw = self:shift_selection_update() or core.redraw
 
 
     local selection = nil
@@ -216,7 +228,7 @@ function TerminalView:draw()
         local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = line[i+1]:ulen()
-        local idx = line_idx - 1
+        local idx = (line_idx - 1) - self.terminal:scrollback()
         local sections
         if selection then
           if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] > offset + length))) then -- overlaps all
@@ -291,9 +303,10 @@ function TerminalView:on_mouse_moved(x, y)
   self.mouse_y = y
   if self.pressing then
     local col, line = self:convert_coordinates(x, y)
-    if not self.selection then self.selection = { col, line } end
+    local scrollback = self.terminal:scrollback()
+    if not self.selection then self.selection = { col, line - scrollback } end
     self.selection[3] = col
-    self.selection[4] = line
+    self.selection[4] = line - scrollback
   end
 end
 
@@ -314,7 +327,7 @@ function TerminalView:input(text)
   if self.terminal then
     self.terminal:input(text)
     if self.terminal:scrollback() ~= 0 then self.terminal:scrollback(0) end
-    self.terminal:update()
+    self:shift_selection_update()
     core.redraw = true
     return true
   end
@@ -423,8 +436,9 @@ end, {
   ["terminal:copy"] = function()
     local tv = core.active_view
     local full_buffer = {}
+    local scrollback = tv.terminal:scrollback()
     for line_idx, line in ipairs(tv.terminal:lines()) do
-      local idx = line_idx - 1
+      local idx = line_idx - 1 - scrollback
       local sorted = { table.unpack(tv.selection) }
       if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
         sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }

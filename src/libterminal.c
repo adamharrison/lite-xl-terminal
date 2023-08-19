@@ -813,13 +813,14 @@ static int translate_charset(charset_e charset, int codepoint) {
   return codepoint;
 }
 
-static void terminal_output(terminal_t* terminal, const char* str, int len) {
+static int terminal_output(terminal_t* terminal, const char* str, int len) {
   if (terminal->debug)  {
     FILE* file = fopen("terminal.log", "ab");
     fwrite(str, sizeof(char), len, file);
     fclose(file);
   }
   unsigned int codepoint;
+  int total_shifts = 0;
   int offset = 0;
   int buffered_sequence_index = strlen(terminal->buffered_sequence);
   view_t* view = &terminal->views[terminal->current_view];
@@ -879,6 +880,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             ++view->cursor_y;
           else {
             terminal_shift_buffer(terminal);
+            ++total_shifts;
           }
         } break;
         case 0x0B:
@@ -915,8 +917,10 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
             view->cursor_x = 0;
             if (view->cursor_y < (end - 1))
               ++view->cursor_y;
-            else
+            else {
               terminal_shift_buffer(terminal);
+              ++total_shifts;
+            }
           }
           codepoint = translate_charset(view->charset, codepoint);
           view->buffer[view->cursor_y * terminal->columns + view->cursor_x] = (buffer_char_t){ view->cursor_styling, codepoint };
@@ -927,6 +931,7 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
     }
   }
   terminal->buffered_sequence[buffered_sequence_index] = 0;
+  return total_shifts;
 }
 
 #ifdef _WIN32
@@ -950,13 +955,13 @@ static void terminal_output(terminal_t* terminal, const char* str, int len) {
   }
 #endif
 
-static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, void*), void* data) {
+static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, void*), void* data, int* total_shifts) {
   char chunk[LIBTERMINAL_CHUNK_SIZE];
   int len, at_least_one = 0;
   #ifdef _WIN32
     WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
     if (terminal->nonblocking_buffer_length > 0) {
-      terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length);
+      *total_shifts += terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length);
       if (callback)
         callback(chunk, terminal->nonblocking_buffer_length, data);
       at_least_one = 1;
@@ -969,7 +974,7 @@ static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, vo
       len = read(terminal->master, chunk, sizeof(chunk));
       if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return at_least_one;
-      terminal_output(terminal, chunk, len);
+      *total_shifts += terminal_output(terminal, chunk, len);
       if (callback)
         callback(chunk, len, data);
       at_least_one = 1;
@@ -1277,12 +1282,15 @@ static void chunk_update(char* buf, int len, void* L) {
   lua_call(L, 1, 0);
 }
 static int f_terminal_update(lua_State* L){
-  int status;
+  int status, total_shifts = 0;
   if (lua_type(L, 2) == LUA_TFUNCTION)
-    status = terminal_update(lua_toterminal(L, 1), chunk_update, L);
+    status = terminal_update(lua_toterminal(L, 1), chunk_update, L, &total_shifts);
   else
-    status = terminal_update(lua_toterminal(L, 1), NULL, NULL);
-  lua_pushboolean(L, status != 0);
+    status = terminal_update(lua_toterminal(L, 1), NULL, NULL, &total_shifts);
+  if (status != 0)
+    lua_pushinteger(L, total_shifts);
+  else
+    lua_pushboolean(L, 0);
   return 1;
 }
 
@@ -1290,7 +1298,7 @@ static int f_terminal_input(lua_State* L) {
   size_t len;
   const char* str = luaL_checklstring(L, 2, &len);
   terminal_input(lua_toterminal(L, 1), str, (int)len);
-  return f_terminal_update(L);
+  return 0;
 }
 
 static int f_terminal_size(lua_State* L) {
