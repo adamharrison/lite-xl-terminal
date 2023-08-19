@@ -16,6 +16,8 @@ config.plugins.terminal = common.merge({
   debug = false,
   term = "xterm-256color",
   shell = default_shell,
+  -- the amount of time between line scrolling when we're dragging offscreen
+  scrolling_speed = 0.01,
   -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
   -- doesn't allow you to newline if you don't set it to `\r`.
   newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
@@ -151,6 +153,11 @@ function TerminalView:update()
           core.redraw = true
         end
         core.blink_timer = tb
+      end
+      if self.scrolling_offscreen and (not self.last_scroll_time or system.get_time() - self.last_scroll_time > self.options.scrolling_speed) then
+        self.last_scroll_time = system.get_time()
+        self.terminal:scrollback(self.terminal:scrollback() + self.scrolling_offscreen)
+        core.redraw = true
       end
     else
       command.perform("terminal:toggle")
@@ -304,6 +311,13 @@ function TerminalView:on_mouse_moved(x, y)
   self.mouse_x = x
   self.mouse_y = y
   if self.pressing then
+    if y < self.position.y then
+      self.scrolling_offscreen = 1
+    elseif y > self.position.y + self.size.y then
+      self.scrolling_offscreen = -1
+    else
+      self.scrolling_offscreen = nil
+    end
     local col, line = self:convert_coordinates(x, y)
     local scrollback = self.terminal:scrollback()
     if not self.selection then self.selection = { col, line - scrollback } end
@@ -316,6 +330,7 @@ end
 function TerminalView:on_mouse_released(button, x, y)
   if button == "left" then
     self.pressing = false
+    self.scrolling_offscreen = nil
     local col, row = self:convert_coordinates(x, y)
     if self.terminal:mouse_tracking_mode() == "normal" then
       self.terminal:input("\x1B[M" .. string.char(32 + 3) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
