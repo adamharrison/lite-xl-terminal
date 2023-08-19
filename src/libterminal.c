@@ -1366,10 +1366,15 @@ static int f_terminal_keypad_keys_mode(lua_State* L) {
 
 static int f_terminal_scrollback(lua_State* L) {
   terminal_t* terminal = lua_toterminal(L, 1);
-  if (lua_gettop(L) >= 2)
-    terminal_scrollback(terminal, luaL_checkinteger(L, 2));
-  lua_pushinteger(L, terminal->scrollback_position);
-  lua_pushinteger(L, terminal->scrollback_total_lines);
+  if (terminal->current_view == VIEW_NORMAL_BUFFER) {
+    if (lua_gettop(L) >= 2)
+      terminal_scrollback(terminal, luaL_checkinteger(L, 2));
+    lua_pushinteger(L, terminal->scrollback_position);
+    lua_pushinteger(L, terminal->scrollback_total_lines);
+  } else {
+    lua_pushinteger(L, 0);
+    lua_pushinteger(L, 0);
+  }
   return 2;
 }
 
