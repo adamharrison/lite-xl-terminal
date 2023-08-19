@@ -246,7 +246,7 @@ function TerminalView:draw()
         local foreground, style = self:convert_color(line[i] >> 32, "foreground")
         local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
-        local length = line[i+1]:ulen()
+        local length = text:ulen()
         local idx = (line_idx - 1) - self.terminal:scrollback()
         local sections
         if selection then
@@ -255,9 +255,9 @@ function TerminalView:draw()
           elseif (idx == selection[2] and idx == selection[4] and selection[1] > offset and selection[3] < offset + length) then -- overlaps in middle
             sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
           elseif (selection[2] < idx or (idx == selection[2] and selection[1] <= offset)) and (idx == selection[4] and selection[3] < offset + length and selection[3] >= offset) then -- overlaps start
-            sections = { { foreground, background, usub(text, 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
+            sections = { { foreground, background, usub(text, 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, length) } }
           elseif (idx == selection[2] and selection[1] < offset + length and selection[1] >= offset) and (selection[4] > idx or (selection[4] == idx and selection[3] > offset + length)) then -- overlaps end
-            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, #text) } }
+            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, length) } }
           end
         end
         for i, section in ipairs(sections or { { background, foreground, text } }) do
