@@ -238,49 +238,42 @@ static int codepoint_to_utf8(unsigned int codepoint, char* target) {
   return 4;
 }
 
-static int terminal_scrollback(terminal_t* terminal, int target) {
-  if (!terminal->scrollback_buffer_start || target <= 0) {
-    terminal->scrollback_target = NULL;
-    terminal->scrollback_position = 0;
-    terminal->scrollback_target_top_offset = 0;
-    return 0;
+// Starts searching for the desired scrollback page based on offset, given the starting page of start; should pass NULL if you don't care.
+// Target should contain the desired offset, top_offset should match the top offset of start, if start is not null.
+static backbuffer_page_t* terminal_find_scrollback_page(terminal_t* terminal, backbuffer_page_t* start, int* offset, int* top_offset) {
+  if (!terminal->scrollback_buffer_start || *offset <= 0) {
+    *offset = 0;
+    *top_offset = 0;
+    return NULL;
   }
-  backbuffer_page_t* current = NULL;
-  int current_top_offset = 0;
-  if (terminal->scrollback_target) {
-    current = terminal->scrollback_target;
-    current_top_offset = terminal->scrollback_target_top_offset;
-  }
-  while (target > current_top_offset) {
-    if (!current) {
-      current = terminal->scrollback_buffer_start;
-      current_top_offset = current->line;
+  while (*offset > *top_offset) {
+    if (!start) {
+      start = terminal->scrollback_buffer_start;
+      *top_offset = start->line;
     } else {
-      if (!current->prev) {
-        terminal->scrollback_target = current;
-        terminal->scrollback_position = current_top_offset;
-        terminal->scrollback_target_top_offset = current_top_offset;
-        return terminal->scrollback_position;
+      if (!start->prev) {
+        *offset = *top_offset;
+        return start;
       }
-      current = current->prev;
-      current_top_offset += current->line;
+      start = start->prev;
+      *top_offset += start->line;
     }
   }
-  while (target < (current_top_offset - current->line)) {
-    if (!current->next) {
-      terminal->scrollback_target = NULL;
-      terminal->scrollback_position = 0;
-      terminal->scrollback_target_top_offset = 0;
-      return 0;
+  while (*offset < (*top_offset - start->line)) {
+    if (!start->next) {
+      *offset = 0;
+      *top_offset = 0;
+      return NULL;
     }
-    current_top_offset -= current->line;
-    current = current->next;
+    *top_offset -= start->line;
+    start = start->next;
   }
-  terminal->scrollback_target = current;
+  return start;
+}
 
-  terminal->scrollback_target_top_offset = current_top_offset;
+static int terminal_scrollback(terminal_t* terminal, int target) {
+  terminal->scrollback_target = terminal_find_scrollback_page(terminal, terminal->scrollback_target, &target, &terminal->scrollback_target_top_offset);
   terminal->scrollback_position = target;
-  assert(terminal->scrollback_position >= 0);
   return terminal->scrollback_position;
 }
 
@@ -1198,14 +1191,22 @@ static terminal_t* lua_toterminal(lua_State* L, int index) {
 
 static int f_terminal_lines(lua_State* L) {
   terminal_t* terminal = lua_toterminal(L, 1);
+  int start = -terminal->scrollback_position;
+  if (lua_gettop(L) >= 2)
+    start = luaL_checkinteger(L, 2);
+  int end = start + terminal->lines;
+  if (lua_gettop(L) >= 3)
+    end = luaL_checkinteger(L, 3) + 1;
   lua_newtable(L);
 
   int total_lines = 0;
-  int remaining_lines = terminal->lines;
+  int remaining_lines = end - start;
   view_t* view = &terminal->views[terminal->current_view];
-  if (terminal->current_view == VIEW_NORMAL_BUFFER && terminal->scrollback_target) {
-    backbuffer_page_t* current_backbuffer = terminal->scrollback_target;
-    int lines_into_buffer = terminal->scrollback_target_top_offset - terminal->scrollback_position;
+  if (terminal->current_view == VIEW_NORMAL_BUFFER && start < 0) {
+    int top_offset = terminal->scrollback_target_top_offset;
+    int offset = -start;
+    backbuffer_page_t* current_backbuffer = terminal_find_scrollback_page(terminal, terminal->scrollback_target, &offset, &top_offset);
+    int lines_into_buffer = top_offset - offset;
     while (current_backbuffer) {
       for (int y = lines_into_buffer; y < current_backbuffer->line; ++y) {
         output_line(L, &current_backbuffer->buffer[y * current_backbuffer->columns], &current_backbuffer->buffer[(y+1) * current_backbuffer->columns]);
@@ -1216,10 +1217,12 @@ static int f_terminal_lines(lua_State* L) {
       current_backbuffer = current_backbuffer->next;
       lines_into_buffer = 0;
     }
+    start = 0;
   }
   if (remaining_lines > 0) {
+    remaining_lines = min(remaining_lines, terminal->lines);
     for (int y = 0; y < remaining_lines; ++y) {
-      output_line(L, &view->buffer[y * terminal->columns], &view->buffer[(y+1) * terminal->columns]);
+      output_line(L, &view->buffer[(y + start) * terminal->columns], &view->buffer[(y + start + 1) * terminal->columns]);
       lua_rawseti(L, -2, ++total_lines);
     }
   }

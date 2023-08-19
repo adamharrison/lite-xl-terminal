@@ -187,7 +187,16 @@ function TerminalView:convert_color(int, target)
   return nil
 end
 
-local function usub(str, i, j) return str:sub(i, j) end
+local function usub(str, i, j) return str:usub(i, j) end
+
+function TerminalView:sorted_selection()
+  if not self.selection then return nil end
+  local selection = { table.unpack(self.selection) }
+  if selection[2] > selection[4] or (selection[2] == selection[4] and selection[1] > selection[3]) then
+    selection = { selection[3], selection[4], selection[1], selection[2] }
+  end
+  return selection
+end
 
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
@@ -200,14 +209,7 @@ function TerminalView:draw()
     core.redraw = self:shift_selection_update() or core.redraw
 
 
-    local selection = nil
-    if self.selection then
-      selection = { table.unpack(self.selection) }
-      if selection[2] > selection[4] or (selection[2] == selection[4] and selection[1] > selection[3]) then
-        selection = { selection[3], selection[4], selection[1], selection[2] }
-      end
-    end
-
+    local selection = self:sorted_selection()
     for line_idx, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + self.options.padding.x
       local should_draw_cursor = false
@@ -436,46 +438,39 @@ end, {
   ["terminal:copy"] = function()
     local tv = core.active_view
     local full_buffer = {}
-    local scrollback = tv.terminal:scrollback()
-    for line_idx, line in ipairs(tv.terminal:lines()) do
-      local idx = line_idx - 1 - scrollback
-      local sorted = { table.unpack(tv.selection) }
-      if sorted[1] > sorted[3] or (sorted[1] == sorted[3] and sorted[2] > sorted[4]) then
-        sorted = { sorted[3], sorted[4], sorted[1], sorted[2] }
-      end
-      if idx >= sorted[2] or idx <= sorted[4] then
-        local offset = 0
-        for i = 1, #line, 2 do
-          local text = line[i + 1]
-          local length = text:ulen()
-          if idx == sorted[2] and idx == sorted[4] then
-            if offset + length >= sorted[1] and offset <= sorted[3] then
-              local s = math.max(sorted[1] - offset, 0) + 1
-              local e = math.min(sorted[3] - offset, length)
-              table.insert(full_buffer, text:sub(s, e))
-            end
-          elseif idx == sorted[2] then
-            if offset + length >= sorted[1] then
-              local s = math.max(sorted[1] - offset, 0) + 1
-              table.insert(full_buffer, text:sub(s, length))
-            end
-          elseif idx > sorted[2] and idx < sorted[4] then
-            table.insert(full_buffer, text)
-          elseif idx == sorted[4] then
-            if offset <= sorted[3] then
-              local e = math.min(sorted[3] - offset, length)
-              table.insert(full_buffer, text:sub(1, e))
-            end
+    local sorted = tv:sorted_selection()
+    for line_idx, line in ipairs(tv.terminal:lines(sorted[2], sorted[4])) do
+      local idx = line_idx - 1 + sorted[2]
+      local offset = 0
+      for i = 1, #line, 2 do
+        local text = line[i + 1]
+        local length = text:ulen()
+        if idx == sorted[2] and idx == sorted[4] then
+          if offset + length >= sorted[1] and offset <= sorted[3] then
+            local s = math.max(sorted[1] - offset, 0) + 1
+            local e = math.min(sorted[3] - offset, length)
+            table.insert(full_buffer, usub(text, s, e))
           end
-          offset = offset + length
+        elseif idx == sorted[2] then
+          if offset + length >= sorted[1] then
+            local s = math.max(sorted[1] - offset, 0) + 1
+            table.insert(full_buffer, usub(text, s, length))
+          end
+        elseif idx > sorted[2] and idx < sorted[4] then
+          table.insert(full_buffer, text)
+        elseif idx == sorted[4] then
+          if offset <= sorted[3] then
+            local e = math.min(sorted[3] - offset, length)
+            table.insert(full_buffer, usub(text, 1, e))
+          end
         end
-        if idx < sorted[4] then
-          table.insert(full_buffer, "\n")
-        end
+        offset = offset + length
+      end
+      if idx < sorted[4] then
+        table.insert(full_buffer, "\n")
       end
     end
-    local text = table.concat(full_buffer)
-    system.set_clipboard(text)
+    system.set_clipboard(table.concat(full_buffer))
   end
 })
 
