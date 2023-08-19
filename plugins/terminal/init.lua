@@ -98,6 +98,7 @@ function TerminalView:new(options)
   TerminalView.super.new(self)
   self.size.y = options.height
   self.options = options
+  self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
 end
@@ -159,13 +160,21 @@ function TerminalView:update()
         self.terminal:scrollback(self.terminal:scrollback() + self.scrolling_offscreen)
         core.redraw = true
       end
+      local scrollback, total_scrollback = self.terminal:scrollback()
+      local lh = self.options.font:get_height()
+      -- 0 should be if we're at max scrollback. 1 should be if we're at 0 scrollback.
+      local v_scrollable = self:get_scrollable_size()
+      self.v_scrollbar:set_size(self.position.x, self.position.y, self.size.x, self.size.y, v_scrollable + self.size.y)
+      local top = 1.0 - self.size.y / (self.size.y + v_scrollable)
+      self.v_scrollbar:set_percent(((1.0 - (scrollback / total_scrollback))) * top)
+      self.v_scrollbar:update()
     else
       command.perform("terminal:toggle")
       self.terminal = nil
       self.routine = nil
     end
   end
-  TerminalView.super.update(self)
+
 end
 
 
@@ -207,6 +216,7 @@ end
 
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
+  TerminalView.super.draw_scrollbar(self)
   if self.terminal then
     local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = self.options.font:get_width(" ")
@@ -272,6 +282,14 @@ function TerminalView:convert_coordinates(x, y)
 end
 
 function TerminalView:on_mouse_pressed(button, x, y, clicks)
+  local result = self.v_scrollbar:on_mouse_pressed(button, x, y, clicks)
+  if result then
+    if result ~= true then
+      local _, total_scrollback = self.terminal:scrollback()
+      self.terminal:scrollback(math.floor((1.0 - result) * total_scrollback))
+    end
+    return true
+  end
   if button == "left" then
     local col, row = self:convert_coordinates(x, y)
     if self.terminal:mouse_tracking_mode() == "x10" then
@@ -307,7 +325,15 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
   end
 end
 
-function TerminalView:on_mouse_moved(x, y)
+function TerminalView:on_mouse_moved(x, y, dx, dy)
+  local result = self.v_scrollbar:on_mouse_moved(x, y, dx, dy)
+  if result then
+    if result ~= true then
+      local _, total_scrollback = self.terminal:scrollback()
+      self.terminal:scrollback(math.floor((1.0 - result) * total_scrollback))
+    end
+    return true
+  end
   self.mouse_x = x
   self.mouse_y = y
   if self.pressing then
@@ -328,6 +354,7 @@ end
 
 
 function TerminalView:on_mouse_released(button, x, y)
+  self.v_scrollbar:on_mouse_released(button, x, y)
   if button == "left" then
     self.pressing = false
     self.scrolling_offscreen = nil
@@ -339,6 +366,15 @@ function TerminalView:on_mouse_released(button, x, y)
     end
   end
 end
+
+
+function TerminalView:get_scrollable_size()
+  if not self.terminal then return self.size.y end
+  local lh = self.options.font:get_height()
+  local _, total_scrollback = self.terminal:scrollback()
+  return total_scrollback * lh + self.size.y
+end
+
 
 function TerminalView:input(text)
   if self.terminal then

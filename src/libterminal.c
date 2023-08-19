@@ -1369,7 +1369,8 @@ static int f_terminal_scrollback(lua_State* L) {
   if (lua_gettop(L) >= 2)
     terminal_scrollback(terminal, luaL_checkinteger(L, 2));
   lua_pushinteger(L, terminal->scrollback_position);
-  return 1;
+  lua_pushinteger(L, terminal->scrollback_total_lines);
+  return 2;
 }
 
 static int f_terminal_focused(lua_State* L) {
