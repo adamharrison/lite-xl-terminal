@@ -247,13 +247,13 @@ function TerminalView:draw()
         local idx = (line_idx - 1) - self.terminal:scrollback()
         local sections
         if selection then
-          if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] > offset + length))) then -- overlaps all
+          if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] >= offset + length))) then -- overlaps all
             sections = { { foreground, background, text } }
           elseif (idx == selection[2] and idx == selection[4] and selection[1] > offset and selection[3] < offset + length) then -- overlaps in middle
             sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
           elseif (selection[2] < idx or (idx == selection[2] and selection[1] <= offset)) and (idx == selection[4] and selection[3] < offset + length and selection[3] >= offset) then -- overlaps start
             sections = { { foreground, background, usub(text, 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, length) } }
-          elseif (idx == selection[2] and selection[1] < offset + length and selection[1] >= offset) and (selection[4] > idx or (selection[4] == idx and selection[3] > offset + length)) then -- overlaps end
+          elseif (idx == selection[2] and selection[1] < offset + length and selection[1] >= offset) and (selection[4] > idx or (selection[4] == idx and selection[3] >= offset + length)) then -- overlaps end
             sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, length) } }
           end
         end
