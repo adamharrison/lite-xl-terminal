@@ -323,6 +323,8 @@ static void terminal_shift_buffer(terminal_t* terminal) {
     }
     if (!terminal->scrollback_buffer_start || terminal->scrollback_buffer_start->columns != terminal->columns || terminal->scrollback_buffer_start->line >= terminal->scrollback_buffer_start->lines) {
       backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
+      if (!terminal->scrollback_buffer_start)
+        terminal->scrollback_buffer_end = page;
       backbuffer_page_t* prev = terminal->scrollback_buffer_start;
       page->prev = prev;
       if (prev)
