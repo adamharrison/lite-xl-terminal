@@ -25,17 +25,13 @@ jobs:
       - name: Create Release(s)
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          git tag -f continuous
-          git push -f origin refs/tags/continuous
-          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous *.so *.dll
-          echo "WAT"
-          echo `git tag --points-at HEAD | head -c 1`
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true;
             gh release create -t v$VERSION v$VERSION *.so *.dll
             gh release delete -y latest || true;
             gh release create -t latest latest *.so *.dll
           fi
+          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous *.so *.dll
 
   build_macos:
     needs: build_linux_windows
@@ -65,3 +61,5 @@ jobs:
             git push -f origin refs/heads/latest
             git push -f origin refs/tags/latest
           fi
+          git tag -f continuous
+          git push -f origin refs/tags/continuous
