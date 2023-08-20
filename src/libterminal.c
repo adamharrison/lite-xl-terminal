@@ -296,6 +296,7 @@ static void terminal_clear_scrollback_buffer(terminal_t* terminal) {
   terminal->scrollback_buffer_end = NULL;
   terminal->scrollback_target = NULL;
   terminal->scrollback_target_top_offset = 0;
+  terminal->scrollback_total_lines = 0;
 }
 
 static void terminal_shift_buffer(terminal_t* terminal) {

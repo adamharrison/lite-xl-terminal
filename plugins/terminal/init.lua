@@ -163,10 +163,8 @@ function TerminalView:update()
       local scrollback, total_scrollback = self.terminal:scrollback()
       local lh = self.options.font:get_height()
       -- 0 should be if we're at max scrollback. 1 should be if we're at 0 scrollback.
-      local v_scrollable = self:get_scrollable_size()
-      self.v_scrollbar:set_size(self.position.x, self.position.y, self.size.x, self.size.y, v_scrollable + self.size.y)
-      local top = 1.0 - self.size.y / (self.size.y + v_scrollable)
-      self.v_scrollbar:set_percent(((1.0 - (scrollback / total_scrollback))) * top)
+      self.v_scrollbar:set_size(self.position.x, self.position.y, self.size.x, self.size.y, self:get_scrollable_size())
+      self.v_scrollbar:set_percent(1.0 - (scrollback / total_scrollback))
       self.v_scrollbar:update()
     else
       command.perform("terminal:toggle")
@@ -216,7 +214,6 @@ end
 
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
-  TerminalView.super.draw_scrollbar(self)
   if self.terminal then
     local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = self.options.font:get_width(" ")
@@ -275,6 +272,7 @@ function TerminalView:draw()
       y = y + lh
     end
   end
+  TerminalView.super.draw_scrollbar(self)
 end
 
 function TerminalView:convert_coordinates(x, y)
