@@ -166,9 +166,7 @@ function TerminalView:update()
       self.v_scrollbar:set_percent(1.0 - (scrollback / total_scrollback))
       self.v_scrollbar:update()
     else
-      command.perform("terminal:toggle-drawer")
-      self.terminal = nil
-      self.routine = nil
+      self:close()
     end
   end
 
@@ -389,11 +387,12 @@ function TerminalView:on_text_input(text)
 end
 
 
-function TerminalView:terminate()
-  if self.terminal then
-    self.terminal:close()
-    self.terminal = nil
-  end
+function TerminalView:close()
+  if self.terminal then self.terminal:close() end
+  if self.node then self.node:close_view(core.root_view.root_node, self) end
+  if core.terminal_view == self then core.terminal_view = nil end
+  self.terminal = nil
+  self.routine = nil
 end
 
 
@@ -487,7 +486,7 @@ end, {
   ["terminal:file-separator"] = function(view) view:input("\x1C") end,
   ["terminal:group-separator"] = function(view) view:input("\x1D") end,
   ["terminal:clear"] = function(view) view.terminal:clear() view:input(view.options.newline) end,
-  ["terminal:close-tab"] = function(view) view:terminate() command.perform("root:close") end
+  ["terminal:close-tab"] = function(view) view:close() end
 });
 
 command.add(function()
@@ -539,9 +538,7 @@ command.add(nil, {
       core.terminal_view.node = core.root_view:get_active_node():split("down", core.terminal_view, { y = true }, true)
       core.set_active_view(core.terminal_view)
     else
-      core.terminal_view.node:close_view(core.root_view.root_node, core.terminal_view)
-      core.terminal_view:terminate()
-      core.terminal_view = nil
+      core.terminal_view:close()
     end
   end,
   ["terminal:execute"] = function(text)
@@ -554,7 +551,10 @@ command.add(nil, {
     end
   end,
   ["terminal:open-tab"] = function()
-    core.root_view:get_active_node_default():add_view(TerminalView(config.plugins.terminal))
+    local tv = TerminalView(config.plugins.terminal)
+    local node = core.root_view:get_active_node_default()
+    node:add_view(tv)
+    tv.node = node
   end
 })
 command.add(function() return core.terminal_view and core.active_view ~= core.terminal_view end, {
