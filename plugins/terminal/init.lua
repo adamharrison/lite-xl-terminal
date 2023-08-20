@@ -125,9 +125,7 @@ function TerminalView:spawn()
   setmetatable(weak_table, { __mode = "v" })
   self.routine = self.routine or core.add_thread(function()
     while weak_table.self and weak_table.self.terminal do
-      if weak_table.self:shift_selection_update() then
-        core.redraw = true
-      end
+      core.redraw = weak_table.self:shift_selection_update() or core.redraw
       coroutine.yield(1 / config.fps)
     end
   end)
@@ -207,8 +205,6 @@ function TerminalView:convert_color(int, target)
   return nil
 end
 
-local function usub(str, i, j) return str:usub(i, j) end
-
 function TerminalView:sorted_selection()
   if not self.selection then return nil end
   local selection = { table.unpack(self.selection) }
@@ -251,7 +247,7 @@ function TerminalView:draw()
         local text = line[i+1]
         local length = text:ulen()
         local valid_utf8 = length ~= nil
-        local subfunc = usub
+        local subfunc = string.usub
         if not valid_utf8 then
           length = #text
           subfunc = string.sub
