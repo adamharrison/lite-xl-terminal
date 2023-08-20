@@ -1011,8 +1011,11 @@ static int terminal_close(terminal_t* terminal) {
     }
   #else
     if (terminal->pid) {
-      close(terminal->master);
-      kill(terminal->pid, SIGHUP);
+      if (terminal->master) {
+        close(terminal->master);
+        terminal->master = 0;
+        kill(terminal->pid, SIGHUP);
+      }
       int status;
       if (waitpid(terminal->pid, &status, WNOHANG))
         terminal->pid = 0;
@@ -1331,6 +1334,8 @@ static int f_terminal_exited(lua_State* L) {
     int status;
     if (waitpid(terminal->pid, &status, WNOHANG) > 0) {
       lua_pushinteger(L, WIFEXITED(status) ? WEXITSTATUS(status) : -1);
+      lua_pushinteger(L, WIFSIGNALED(status) ? WTERMSIG(status) : -1);
+      return 2;
     } else
       lua_pushboolean(L, 0);
   #endif

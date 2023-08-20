@@ -146,7 +146,8 @@ function TerminalView:update()
     end
   end
   if self.terminal then
-    if not self.terminal:exited() then
+    local exited = self.terminal:exited()
+    if exited == false then
       if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
         self.focused = core.active_view == self
         self.modified_since_last_focus = false
@@ -407,6 +408,47 @@ function TerminalView:close()
 end
 
 
+function TerminalView:get_text(line1, col1, line2, col2)
+  for line_idx, line in ipairs(tv.terminal:lines(line1, line2)) do
+    local idx = line_idx - 1 + line1
+    local offset = 0
+    for i = 1, #line, 2 do
+      local text = line[i + 1]
+      local length = text:ulen()
+      local usub = string.usub
+      if length == nil then
+        length = #text
+        usub = string.sub
+      end
+      if idx == line1 and idx == line2 then
+        if offset + length >= col1 and offset <= col2 then
+          local s = math.max(col1 - offset, 0) + 1
+          local e = math.min(col2 - offset, length)
+          table.insert(full_buffer, usub(text, s, e))
+        end
+      elseif idx == line1 then
+        if offset + length >= col1 then
+          local s = math.max(col1 - offset, 0) + 1
+          table.insert(full_buffer, usub(text, s, length))
+        end
+      elseif idx > line1 and idx < line2 then
+        table.insert(full_buffer, text)
+      elseif idx == line2 then
+        if offset <= col2 then
+          local e = math.min(col2 - offset, length)
+          table.insert(full_buffer, usub(text, 1, e))
+        end
+      end
+      offset = offset + length
+    end
+    if idx < line2 then
+      table.insert(full_buffer, "\n")
+    end
+  end
+  return table.concat(full_buffer)
+end
+
+
 command.add(function(amount)
   local view = core.root_view.overlapping_view or core.active_view
   return (view and view:is(TerminalView)), view, amount
@@ -504,41 +546,7 @@ command.add(function()
   return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
 end, {
   ["terminal:copy"] = function()
-    local tv = core.active_view
-    local full_buffer = {}
-    local sorted = tv:sorted_selection()
-    for line_idx, line in ipairs(tv.terminal:lines(sorted[2], sorted[4])) do
-      local idx = line_idx - 1 + sorted[2]
-      local offset = 0
-      for i = 1, #line, 2 do
-        local text = line[i + 1]
-        local length = text:ulen()
-        if idx == sorted[2] and idx == sorted[4] then
-          if offset + length >= sorted[1] and offset <= sorted[3] then
-            local s = math.max(sorted[1] - offset, 0) + 1
-            local e = math.min(sorted[3] - offset, length)
-            table.insert(full_buffer, usub(text, s, e))
-          end
-        elseif idx == sorted[2] then
-          if offset + length >= sorted[1] then
-            local s = math.max(sorted[1] - offset, 0) + 1
-            table.insert(full_buffer, usub(text, s, length))
-          end
-        elseif idx > sorted[2] and idx < sorted[4] then
-          table.insert(full_buffer, text)
-        elseif idx == sorted[4] then
-          if offset <= sorted[3] then
-            local e = math.min(sorted[3] - offset, length)
-            table.insert(full_buffer, usub(text, 1, e))
-          end
-        end
-        offset = offset + length
-      end
-      if idx < sorted[4] then
-        table.insert(full_buffer, "\n")
-      end
-    end
-    system.set_clipboard(table.concat(full_buffer))
+    system.set_clipboard(core.active_view:get_text(tv:sorted_selection()))
   end
 })
 
