@@ -263,7 +263,7 @@ function TerminalView:draw()
         for i, section in ipairs(sections or { { background, foreground, text } }) do
           local background, foreground, text = table.unpack(section)
           if background and background ~= self.options.background then
-            renderer.draw_rect(x, y, text:ulen()*space_width, lh, background)
+            renderer.draw_rect(x, y, (text:ulen() or #text)*space_width, lh, background)
           end
           x = renderer.draw_text(font, text, x, y, foreground)
         end
