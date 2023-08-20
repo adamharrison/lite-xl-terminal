@@ -547,6 +547,10 @@ command.add(nil, {
     else
       target_view:input(text .. target_view.options.newline)
     end
+  end,
+  ["terminal:open-tab"] = function()
+    local node = core.root_view:get_active_node_default()
+    node:add_view(TerminalView(config.plugins.terminal))
   end
 })
 command.add(function() return view and core.active_view ~= view end, {
@@ -639,6 +643,8 @@ keymap.add {
   ["ctrl+r"] = "terminal:history",
   ["ctrl+s"] = "terminal:start",
   ["ctrl+t"] = { "terminal:transpose", "terminal:toggle" },
+  ["alt+t"]  = "terminal:open-tab",
+  ["alt+w"]  = "root:close",
   ["ctrl+u"] = "terminal:negative-acknowledge",
   ["ctrl+v"] = "terminal:synchronous-idel",
   ["ctrl+w"] = "terminal:end-of-transmission-block",
