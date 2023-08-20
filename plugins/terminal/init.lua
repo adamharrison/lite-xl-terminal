@@ -90,7 +90,7 @@ if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font 
 
 local TerminalView = View:extend()
 
-function TerminalView:get_name() return self.terminal and self.terminal:name() or "Terminal" end
+function TerminalView:get_name() return self.terminal and self.terminal:name() and ((self.modified_since_last_focus and "* " or "") .. self.terminal:name()) or "Terminal" end
 function TerminalView:supports_text_input() return true end
 
 function TerminalView:new(options)
@@ -100,10 +100,12 @@ function TerminalView:new(options)
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
+  self.modified_since_last_focus = false
 end
 
 function TerminalView:shift_selection_update()
   local shifts = self.terminal:update()
+  if shifts and not self.focused then self.modified_since_last_focus = true end
   if self.selection and shifts then
     self.selection[2] = self.selection[2] - shifts
     self.selection[4] = self.selection[4] - shifts
@@ -143,6 +145,7 @@ function TerminalView:update()
     if not self.terminal:exited() then
       if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
         self.focused = core.active_view == self
+        self.modified_since_last_focus = false
         self.terminal:focused(self.focused)
       end
       local x, y, mode = self.terminal:cursor()
