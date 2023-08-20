@@ -19,7 +19,8 @@ config.plugins.terminal = common.merge({
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
   -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
-  -- doesn't allow you to newline if you don't set it to `\r`.
+  -- doesn't allow you to newline if you don't set it to `\r`. `zsh` gives me personally some problems but
+  -- sems to work for others. Weird.
   newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
   backspace = "\x7F",
   delete = "\x1B[3~",
@@ -90,7 +91,7 @@ if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font 
 
 local TerminalView = View:extend()
 
-function TerminalView:get_name() return self.terminal and self.terminal:name() and ((self.modified_since_last_focus and "* " or "") .. self.terminal:name()) or "Terminal" end
+function TerminalView:get_name() return (self.modified_since_last_focus and "* " or "") .. (self.terminal and self.terminal:name() or "Terminal") end
 function TerminalView:supports_text_input() return true end
 
 function TerminalView:new(options)
@@ -116,17 +117,22 @@ function TerminalView:shift_selection_update()
   return shifts
 end
 
+
 function TerminalView:spawn()
   self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
+  -- We make this weak so that any other method of closing the view gets caught up in the garbage collection and the coroutine doesn't count as a reference for gc purposes.
+  local weak_table = { self = self }
+  setmetatable(weak_table, { __mode = "v" })
   self.routine = self.routine or core.add_thread(function()
-    while self.terminal do
-      if self:shift_selection_update() then
+    while weak_table.self and weak_table.self.terminal do
+      if weak_table.self:shift_selection_update() then
         core.redraw = true
       end
       coroutine.yield(1 / config.fps)
     end
   end)
 end
+
 
 function TerminalView:update()
   if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
