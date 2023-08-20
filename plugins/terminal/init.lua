@@ -89,7 +89,6 @@ if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font 
 
 
 local TerminalView = View:extend()
-local view
 
 function TerminalView:get_name() return self.terminal and self.terminal:name() or "Terminal" end
 function TerminalView:supports_text_input() return true end
@@ -167,7 +166,7 @@ function TerminalView:update()
       self.v_scrollbar:set_percent(1.0 - (scrollback / total_scrollback))
       self.v_scrollbar:update()
     else
-      command.perform("terminal:toggle")
+      command.perform("terminal:toggle-drawer")
       self.terminal = nil
       self.routine = nil
     end
@@ -389,6 +388,15 @@ function TerminalView:on_text_input(text)
   return self:input(text)
 end
 
+
+function TerminalView:terminate()
+  if self.terminal then
+    self.terminal:close()
+    self.terminal = nil
+  end
+end
+
+
 command.add(function(amount)
   local view = core.root_view.overlapping_view or core.active_view
   return (view and view:is(TerminalView)), view, amount
@@ -478,7 +486,8 @@ end, {
   ["terminal:end-of-medium"] = function(view) view:input("\x19") end,
   ["terminal:file-separator"] = function(view) view:input("\x1C") end,
   ["terminal:group-separator"] = function(view) view:input("\x1D") end,
-  ["terminal:clear"] = function(view) view.terminal:clear() view:input(view.options.newline) end
+  ["terminal:clear"] = function(view) view.terminal:clear() view:input(view.options.newline) end,
+  ["terminal:close-tab"] = function(view) view:terminate() command.perform("root:close") end
 });
 
 command.add(function()
@@ -524,24 +533,20 @@ end, {
 })
 
 command.add(nil, {
-  ["terminal:toggle"] = function()
-    if not view then
-      view = TerminalView(config.plugins.terminal)
-      core.terminal_view = view
-      local node = core.root_view:get_active_node()
-      view.node = node:split("down", view, { y = true }, true)
-      core.set_active_view(view)
+  ["terminal:toggle-drawer"] = function()
+    if not core.terminal_view then
+      core.terminal_view = TerminalView(config.plugins.terminal)
+      core.terminal_view.node = core.root_view:get_active_node():split("down", core.terminal_view, { y = true }, true)
+      core.set_active_view(core.terminal_view)
     else
-      view.node:close_view(core.root_view.root_node, view)
-      view.terminal:close()
-      view.terminal = nil
-      view = nil
+      core.terminal_view.node:close_view(core.root_view.root_node, core.terminal_view)
+      core.terminal_view:terminate()
       core.terminal_view = nil
     end
   end,
   ["terminal:execute"] = function(text)
-    if not view then command.perform("terminal:toggle") end
-    local target_view = core.active_view:is(TerminalView) and core.active_view or view
+    if not core.terminal_view then command.perform("terminal:toggle") end
+    local target_view = core.active_view:is(TerminalView) and core.active_view or core.terminal_view
     if not text then
       core.command_view:enter("Execute Command", { submit = function(text) target_view:input(text .. target_view.options.newline) end })
     else
@@ -549,13 +554,12 @@ command.add(nil, {
     end
   end,
   ["terminal:open-tab"] = function()
-    local node = core.root_view:get_active_node_default()
-    node:add_view(TerminalView(config.plugins.terminal))
+    core.root_view:get_active_node_default():add_view(TerminalView(config.plugins.terminal))
   end
 })
-command.add(function() return view and core.active_view ~= view end, {
+command.add(function() return core.terminal_view and core.active_view ~= core.terminal_view end, {
   ["terminal:focus"] = function()
-    core.set_active_view(view)
+    core.set_active_view(core.terminal_view)
   end
 })
 
@@ -642,9 +646,9 @@ keymap.add {
   ["ctrl+q"] = "terminal:stop",
   ["ctrl+r"] = "terminal:history",
   ["ctrl+s"] = "terminal:start",
-  ["ctrl+t"] = { "terminal:transpose", "terminal:toggle" },
+  ["ctrl+t"] = { "terminal:transpose", "terminal:toggle-drawer" },
   ["alt+t"]  = "terminal:open-tab",
-  ["alt+w"]  = "root:close",
+  ["alt+w"]  = "terminal:close-tab",
   ["ctrl+u"] = "terminal:negative-acknowledge",
   ["ctrl+v"] = "terminal:synchronous-idel",
   ["ctrl+w"] = "terminal:end-of-transmission-block",
