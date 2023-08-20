@@ -241,17 +241,23 @@ function TerminalView:draw()
         local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = text:ulen()
+        local valid_utf8 = length ~= nil
+        local subfunc = usub
+        if not valid_utf8 then
+          length = #text
+          subfunc = string.sub
+        end
         local idx = (line_idx - 1) - self.terminal:scrollback()
         local sections
         if selection then
           if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] >= offset + length))) then -- overlaps all
             sections = { { foreground, background, text } }
           elseif (idx == selection[2] and idx == selection[4] and selection[1] > offset and selection[3] < offset + length) then -- overlaps in middle
-            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, #text) } }
+            sections = { { background, foreground, subfunc(text, 1, selection[1] - offset) }, { foreground, background, subfunc(text, selection[1] - offset + 1, selection[3] - offset) }, { background, foreground, subfunc(text, selection[3] - offset + 1, length) } }
           elseif (selection[2] < idx or (idx == selection[2] and selection[1] <= offset)) and (idx == selection[4] and selection[3] < offset + length and selection[3] >= offset) then -- overlaps start
-            sections = { { foreground, background, usub(text, 1, selection[3] - offset) }, { background, foreground, usub(text, selection[3] - offset + 1, length) } }
+            sections = { { foreground, background, subfunc(text, 1, selection[3] - offset) }, { background, foreground, subfunc(text, selection[3] - offset + 1, length) } }
           elseif (idx == selection[2] and selection[1] < offset + length and selection[1] >= offset) and (selection[4] > idx or (selection[4] == idx and selection[3] >= offset + length)) then -- overlaps end
-            sections = { { background, foreground, usub(text, 1, selection[1] - offset) }, { foreground, background, usub(text, selection[1] - offset + 1, length) } }
+            sections = { { background, foreground, subfunc(text, 1, selection[1] - offset) }, { foreground, background, subfunc(text, selection[1] - offset + 1, length) } }
           end
         end
         for i, section in ipairs(sections or { { background, foreground, text } }) do
