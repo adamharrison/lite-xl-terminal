@@ -409,6 +409,7 @@ end
 
 
 function TerminalView:get_text(line1, col1, line2, col2)
+  local full_buffer = {}
   for line_idx, line in ipairs(self.terminal:lines(line1, line2)) do
     local idx = line_idx - 1 + line1
     local offset = 0
@@ -546,7 +547,8 @@ command.add(function()
   return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
 end, {
   ["terminal:copy"] = function()
-    system.set_clipboard(core.active_view:get_text(core.active_view:sorted_selection()))
+    local selection = core.active_view:sorted_selection()
+    system.set_clipboard(core.active_view:get_text(selection[2], selection[1], selection[4], selection[3]))
   end
 })
 
