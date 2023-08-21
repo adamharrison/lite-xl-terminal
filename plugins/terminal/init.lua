@@ -155,7 +155,7 @@ function TerminalView:update()
       end
       local x, y, mode = self.terminal:cursor()
       if mode == "blinking" then
-        local T = config.blink_period
+        local T, t0 = config.blink_period, core.blink_start
         local ta, tb = core.blink_timer, system.get_time()
         if ((tb - t0) % T < T / 2) ~= ((ta - t0) % T < T / 2) then
           core.redraw = true
@@ -546,7 +546,7 @@ command.add(function()
   return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
 end, {
   ["terminal:copy"] = function()
-    system.set_clipboard(core.active_view:get_text(tv:sorted_selection()))
+    system.set_clipboard(core.active_view:get_text(core.active_view:sorted_selection()))
   end
 })
 
