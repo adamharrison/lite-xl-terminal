@@ -632,9 +632,11 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           if (target_color.value != UNTARGETED_COLOR.value) {
             if (view->cursor_styling_inversed)
               target_foreground = !target_foreground;
-            if (target_foreground)
+            if (target_foreground) {
+              uint8_t attributes = view->cursor_styling.foreground.attributes;
               view->cursor_styling.foreground = target_color;
-            else
+              view->cursor_styling.foreground.attributes |= attributes;
+            } else
               view->cursor_styling.background = target_color;
           }
           char* next = strchr(&seq[offset], ';');

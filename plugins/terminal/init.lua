@@ -13,28 +13,45 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 local default_shell = os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
 config.plugins.terminal = common.merge({
+  -- outputs a terminal.log file of all the output of your shell
   debug = false,
+  -- the TERM to present as.
   term = "xterm-256color",
+  -- whether or not we should intercept normal docview keypresses that would oterhwise activate
+  passthrough_shortcuts = false,
+  -- the default shell to boot up in
   shell = default_shell,
+  -- the arguments to pass to your shell
+  arguments = { },
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
+  -- the newline character to use
   -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
   -- doesn't allow you to newline if you don't set it to `\r`. `zsh` gives me personally some problems but
   -- sems to work for others. Weird.
   newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
+  -- the backspace character to use
   backspace = "\x7F",
+  -- the delete character to use
   delete = "\x1B[3~",
-  arguments = { },
+  -- the amount of lines you can emit before we start cutting them off
   scrollback_limit = 10000,
-  height = 300,
+  -- the default height of the console drawer
+  drawer_height = 300,
+  -- the default console font. non-monsospace is unsupported
   font = style.code_font,
+  -- padding around the edges of the terminal
   padding = { x = 0, y = 0 },
+  -- default background color if not explicitly set by the shell
   background = { common.color "#000000" },
+  -- default text color if not explicitly by the shell
   text = { common.color "#FFFFFF" },
+  -- show bold text in bright colors
+  bold_text_in_bright_colors = true,
   colors = {
-    [  0] = { common.color "#000000" }, [  1] = { common.color "#800000" }, [  2] = { common.color "#008000" }, [  3] = { common.color "#808000" }, [  4] = { common.color "#000080" },
-    [  5] = { common.color "#800080" }, [  6] = { common.color "#008080" }, [  7] = { common.color "#c0c0c0" }, [  8] = { common.color "#808080" }, [  9] = { common.color "#ff0000" },
-    [ 10] = { common.color "#00ff00" }, [ 11] = { common.color "#ffff00" }, [ 12] = { common.color "#0000ff" }, [ 13] = { common.color "#ff00ff" }, [ 14] = { common.color "#00ffff" },
+    [  0] = { common.color "#000000" }, [  1] = { common.color "#aa0000" }, [  2] = { common.color "#44aa44" }, [  3] = { common.color "#aa5500" }, [  4] = { common.color "#0039aa" },
+    [  5] = { common.color "#aa22aa" }, [  6] = { common.color "#1a92aa" }, [  7] = { common.color "#aaaaaa" }, [  8] = { common.color "#777777" }, [  9] = { common.color "#ff8787" },
+    [ 10] = { common.color "#4ce64c" }, [ 11] = { common.color "#ded82c" }, [ 12] = { common.color "#295fcc" }, [ 13] = { common.color "#cc58cc" }, [ 14] = { common.color "#4ccce6" },
     [ 15] = { common.color "#ffffff" }, [ 16] = { common.color "#000000" }, [ 17] = { common.color "#00005f" }, [ 18] = { common.color "#000087" }, [ 19] = { common.color "#0000af" },
     [ 20] = { common.color "#0000d7" }, [ 21] = { common.color "#0000ff" }, [ 22] = { common.color "#005f00" }, [ 23] = { common.color "#005f5f" }, [ 24] = { common.color "#005f87" },
     [ 25] = { common.color "#005faf" }, [ 26] = { common.color "#005fd7" }, [ 27] = { common.color "#005fff" }, [ 28] = { common.color "#008700" }, [ 29] = { common.color "#00875f" },
@@ -96,7 +113,7 @@ function TerminalView:supports_text_input() return true end
 
 function TerminalView:new(options)
   TerminalView.super.new(self)
-  self.size.y = options.height
+  self.size.y = options.drawer_height
   self.options = options
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
@@ -188,7 +205,7 @@ function TerminalView:set_target_size(axis, value)
   end
 end
 
-function TerminalView:convert_color(int, target)
+function TerminalView:convert_color(int, target, should_bright)
   local attributes = int >> 24
   local type = (attributes & 0x7)
   if type == 0 then
@@ -199,6 +216,7 @@ function TerminalView:convert_color(int, target)
     return self.options.text, attributes
   elseif type == 2 then
     local index = (int >> 16) & 0xFF
+    if index < 9 and should_bright and (((attributes >> 3) & 0x1) ~= 0) then index = index + 8 end
     return self.options.colors[index], attributes
   elseif type == 3 then
     return { ((int >> 16) & 0xFF), ((int >> 8) & 0xFF), ((int >> 0) & 0xFF), 255 }, attributes
@@ -243,7 +261,7 @@ function TerminalView:draw()
       local offset = 0
       for i = 1, #line, 2 do
         local background = self:convert_color(line[i] & 0xFFFFFFFF, "background")
-        local foreground, style = self:convert_color(line[i] >> 32, "foreground")
+        local foreground, style = self:convert_color(line[i] >> 32, "foreground", self.options.bold_text_in_bright_colors)
         local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = text:ulen()
