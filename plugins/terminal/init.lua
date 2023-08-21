@@ -409,7 +409,7 @@ end
 
 
 function TerminalView:get_text(line1, col1, line2, col2)
-  for line_idx, line in ipairs(tv.terminal:lines(line1, line2)) do
+  for line_idx, line in ipairs(self.terminal:lines(line1, line2)) do
     local idx = line_idx - 1 + line1
     local offset = 0
     for i = 1, #line, 2 do
@@ -658,9 +658,8 @@ keymap.add {
   ["ctrl+k"] = "terminal:vertical-tab",
   ["ctrl+l"] = "terminal:redraw",
   ["ctrl+m"] = "terminal:carriage-feed",
-  ["ctrl+n"] = "terminal:carriage-feed",
-  ["ctrl+o"] = "terminal:shift-in",
   ["ctrl+n"] = "terminal:shift-out",
+  ["ctrl+o"] = "terminal:shift-in",
   ["ctrl+p"] = "terminal:data-line-escape",
   ["ctrl+q"] = "terminal:stop",
   ["ctrl+r"] = "terminal:history",
