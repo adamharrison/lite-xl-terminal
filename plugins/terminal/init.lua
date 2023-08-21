@@ -17,8 +17,9 @@ config.plugins.terminal = common.merge({
   debug = false,
   -- the TERM to present as.
   term = "xterm-256color",
-  -- whether or not we should intercept normal docview keypresses that would oterhwise activate
-  passthrough_shortcuts = false,
+  -- pressing this key and ctrl will allow normal commands to be run that start with ctrl (ctrl+n, ctrl+w, etc..) whlie using the terminal
+  -- set to nil to disable entirely, or to "adam" to allow for the shift thing, as well as automatic passthrough for anything other than ctrl+c,z,d.
+  inversion_key = "shift",
   -- the default shell to boot up in
   shell = default_shell,
   -- the arguments to pass to your shell
@@ -115,6 +116,7 @@ function TerminalView:new(options)
   TerminalView.super.new(self)
   self.size.y = options.drawer_height
   self.options = options
+  self.inversion_pressed = false
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
@@ -216,7 +218,7 @@ function TerminalView:convert_color(int, target, should_bright)
     return self.options.text, attributes
   elseif type == 2 then
     local index = (int >> 16) & 0xFF
-    if index < 9 and should_bright and (((attributes >> 3) & 0x1) ~= 0) then index = index + 8 end
+    if index < 8 and should_bright and (((attributes >> 3) & 0x1) ~= 0) then index = index + 8 end
     return self.options.colors[index], attributes
   elseif type == 3 then
     return { ((int >> 16) & 0xFF), ((int >> 8) & 0xFF), ((int >> 0) & 0xFF), 255 }, attributes
