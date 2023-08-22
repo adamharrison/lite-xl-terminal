@@ -625,8 +625,11 @@ core.status_view:add_item({
   end
 })
 
-
-
+-- add in the terminal metacommands not related to actually sending things to the temrinal first
+keymap.add({
+  ["ctrl+shift+`"] = "terminal:open-tab",
+  ["alt+t"]  = "terminal:toggle-drawer"
+})
 local keys = {
   ["return"] = "terminal:return",
   ["ctrl+return"] = "terminal:return",
@@ -690,9 +693,7 @@ local keys = {
   ["ctrl+q"] = "terminal:stop",
   ["ctrl+r"] = "terminal:history",
   ["ctrl+s"] = "terminal:start",
-  ["ctrl+t"] = { "terminal:transpose", "terminal:open-tab" },
-  ["alt+t"]  = "terminal:toggle-drawer",
-  ["ctrl+shift+t"] = "terminal:close-tab",
+  ["ctrl+t"] = "terminal:transpose",
   ["ctrl+u"] = "terminal:negative-acknowledge",
   ["ctrl+v"] = "terminal:synchronous-idel",
   ["ctrl+w"] = "terminal:end-of-transmission-block",
@@ -718,7 +719,7 @@ if config.plugins.terminal.inversion_key then
         commands["terminal:" .. v] = function(...) command.perform(v, ...) end
       end
     end
-    if #keymaps > 0 then
+    if #keymaps > 0 and not keymap.map["ctrl+" .. config.plugins.terminal.inversion_key .. "+" .. string.char(i)] then
       settings["ctrl+" .. config.plugins.terminal.inversion_key .. "+" .. string.char(i)] = keymaps
     end
   end
