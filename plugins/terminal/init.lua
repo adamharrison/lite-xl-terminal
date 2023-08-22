@@ -310,6 +310,29 @@ function TerminalView:convert_coordinates(x, y)
   return math.max(math.floor((x - self.position.x - self.options.padding.x) / self.options.font:get_width(" ")), 0), math.max(math.floor((y - self.position.y - self.options.padding.y) / self.options.font:get_height()), 0)
 end
 
+function TerminalView:get_word_boundaries(col, row)
+  for line_idx, line in ipairs(self.terminal:lines()) do
+    if line_idx == row + 1 then
+      local text = ""
+      for i = 1, #line, 2 do
+        text = text .. line[i+1]
+      end
+      local scrollback = self.terminal:scrollback()
+      row = row - scrollback
+      if text:sub(col + 1, col + 1):match("%s") then
+        return col, row, col + 1, row
+      end
+      local next_space = text:find("%s", col + 1) or #text
+      local last_space = 0
+      local idx = text:reverse():find("%s", #text - col)
+      if idx then
+        last_space = (#text - idx) + 1
+      end
+      return last_space, row, next_space - 1, row
+    end
+  end
+end
+
 function TerminalView:on_mouse_pressed(button, x, y, clicks)
   local result = self.v_scrollbar:on_mouse_pressed(button, x, y, clicks)
   if result then
@@ -332,22 +355,12 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
         self.selection = nil
         self.pressing = true
       elseif clicks % 4 == 2 then
-        for line_idx, line in ipairs(self.terminal:lines()) do
-          if line_idx == row + 1 then
-            local text = ""
-            for i = 1, #line, 2 do
-              text = text .. line[i+1]
-            end
-            local next_space = text:find("%s", col) or #text
-            local last_space = 0
-            local idx = text:reverse():find("%s", #text - col)
-            if idx then
-              last_space = (#text - idx) + 1
-            end
-            self.selection = { last_space, row, next_space - 1, row }
-          end
-        end
+        self.word_selecting = { self:get_word_boundaries(col, row) }
+        self.selection = { table.unpack(self.word_selecting) }
       elseif clicks % 4 == 3 then
+        local scrollback = self.terminal:scrollback()
+        row = row - scrollback
+        self.row_selecting = { 0, row, 0, row + 1 }
         self.selection = { 0, row, 0, row + 1 }
       end
     end
@@ -365,7 +378,7 @@ function TerminalView:on_mouse_moved(x, y, dx, dy)
   end
   self.mouse_x = x
   self.mouse_y = y
-  if self.pressing then
+  if self.pressing or self.word_selecting or self.row_selecting then
     if y < self.position.y then
       self.scrolling_offscreen = 1
     elseif y > self.position.y + self.size.y then
@@ -376,8 +389,31 @@ function TerminalView:on_mouse_moved(x, y, dx, dy)
     local col, line = self:convert_coordinates(x, y)
     local scrollback = self.terminal:scrollback()
     if not self.selection then self.selection = { col, line - scrollback } end
-    self.selection[3] = col
-    self.selection[4] = line - scrollback
+    if not self.word_selecting and not self.row_selecting then
+      self.selection[3] = col
+      self.selection[4] = line - scrollback
+    elseif self.word_selecting then
+      local col1, line1, col2, line2 = self:get_word_boundaries(col, line)
+      if not col1 then
+        self.selection[3] = col
+        self.selection[4] = line - scrollback
+      elseif self.word_selecting[2] > line1 or (self.word_selecting[2] == line1 and self.word_selecting[1] >= col1) then
+        self.selection[1] = col1
+        self.selection[2] = line1
+        self.selection[3] = self.word_selecting[3]
+        self.selection[4] = self.word_selecting[4]
+      else
+        self.selection[1] = self.word_selecting[1]
+        self.selection[2] = self.word_selecting[2]
+        self.selection[3] = col2
+        self.selection[4] = line2
+      end
+    else
+      self.selection[1] = 0
+      self.selection[2] = math.min(self.row_selecting[2], line - scrollback)
+      self.selection[3] = 0
+      self.selection[4] = math.max(self.row_selecting[4], line - scrollback + 1)
+    end
   end
 end
 
@@ -386,6 +422,8 @@ function TerminalView:on_mouse_released(button, x, y)
   self.v_scrollbar:on_mouse_released(button, x, y)
   if button == "left" then
     self.pressing = false
+    self.word_selecting = nil
+    self.row_selecting = nil
     self.scrolling_offscreen = nil
     local col, row = self:convert_coordinates(x, y)
     if self.terminal:mouse_tracking_mode() == "normal" then
