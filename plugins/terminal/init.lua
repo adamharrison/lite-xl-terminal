@@ -461,7 +461,8 @@ end
 
 function TerminalView:close()
   if self.terminal then self.terminal:close() end
-  if self.node then self.node:close_view(core.root_view.root_node, self) end
+  local node = core.root_view.root_node:get_node_for_view(self)
+  node:close_view(core.root_view.root_node, self)
   if core.terminal_view == self then core.terminal_view = nil end
   self.terminal = nil
   self.routine = nil
@@ -619,7 +620,7 @@ command.add(nil, {
   ["terminal:toggle-drawer"] = function()
     if not core.terminal_view then
       core.terminal_view = TerminalView(config.plugins.terminal)
-      core.terminal_view.node = core.root_view:get_active_node():split("down", core.terminal_view, { y = true }, true)
+      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
       core.set_active_view(core.terminal_view)
     else
       core.terminal_view:close()
@@ -636,9 +637,7 @@ command.add(nil, {
   end,
   ["terminal:open-tab"] = function()
     local tv = TerminalView(config.plugins.terminal)
-    local node = core.root_view:get_active_node_default()
-    node:add_view(tv)
-    tv.node = node
+    core.root_view:get_active_node_default():add_view(tv)
   end
 })
 command.add(function() return core.terminal_view and core.active_view ~= core.terminal_view end, {
