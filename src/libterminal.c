@@ -62,7 +62,8 @@ typedef enum attributes_e {
   // Attributes
   ATTRIBUTE_BOLD = 8,
   ATTRIBUTE_ITALIC = 16,
-  ATTRIBUTE_UNDERLINE = 32
+  ATTRIBUTE_UNDERLINE = 32,
+  ATTRIBUTE_STYLING_MASK = (32 | 16 | 8)
 } attributes_e;
 
 typedef struct color_t {
@@ -635,7 +636,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
             if (target_foreground) {
               uint8_t attributes = view->cursor_styling.foreground.attributes;
               view->cursor_styling.foreground = target_color;
-              view->cursor_styling.foreground.attributes |= attributes;
+              view->cursor_styling.foreground.attributes |= (attributes & ATTRIBUTE_STYLING_MASK);
             } else
               view->cursor_styling.background = target_color;
           }
