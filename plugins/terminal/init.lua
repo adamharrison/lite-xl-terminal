@@ -18,8 +18,10 @@ config.plugins.terminal = common.merge({
   -- the TERM to present as.
   term = "xterm-256color",
   -- pressing this key and ctrl will allow normal commands to be run that start with ctrl (ctrl+n, ctrl+w, etc..) whlie using the terminal
-  -- set to nil to disable entirely, or to "adam" to allow for the shift thing, as well as automatic passthrough for anything other than ctrl+c,z,d.
+  -- set to nil to disable entirely
   inversion_key = "shift",
+  -- lua pattern for escape sequences to ignore. nil to target all escapes to terminal. example value would be "ctrl%+[nwpf]"
+  omit_escapes = "ctrl%+[nwpf]",
   -- the default shell to boot up in
   shell = default_shell,
   -- the arguments to pass to your shell
@@ -326,10 +328,10 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
     elseif self.terminal:mouse_tracking_mode() == "sgr" then
       self.terminal:input("\x1B[<0;" .. (col+1) .. ";" .. (row+1) .. "M" )
     else
-      if clicks == 1 then
+      if clicks % 4 == 1 then
         self.selection = nil
         self.pressing = true
-      elseif clicks == 2 then
+      elseif clicks % 4 == 2 then
         for line_idx, line in ipairs(self.terminal:lines()) do
           if line_idx == row + 1 then
             local text = ""
@@ -345,7 +347,7 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
             self.selection = { last_space, row, next_space - 1, row }
           end
         end
-      elseif clicks == 3 then
+      elseif clicks % 4 == 3 then
         self.selection = { 0, row, 0, row + 1 }
       end
     end
@@ -488,9 +490,11 @@ end, {
   end
 })
 
-command.add(function(...)
+
+local active_terminal_predicate = function(...)
   return (core.active_view:is(TerminalView) and core.active_view.terminal), core.active_view, ...
-end, {
+end
+command.add(active_terminal_predicate, {
   ["terminal:backspace"] = function(view) view:input(view.options.backspace) end,
   ["terminal:ctrl-backspace"] = function(view) view:input(view.options.backspace == "\b" and "\x7F" or "\b") end,
   ["terminal:alt-backspace"] = function(view) view:input("\x1B" .. view.options.backspace) end,
@@ -623,7 +627,7 @@ core.status_view:add_item({
 
 
 
-keymap.add {
+local keys = {
   ["return"] = "terminal:return",
   ["ctrl+return"] = "terminal:return",
   ["shift+return"] = "terminal:return",
@@ -699,6 +703,28 @@ keymap.add {
   ["ctrl+\\"] = "terminal:file-separator",
   ["ctrl+]"] = "terminal:group-separator"
 }
+local non_omitted_keys = {}
+for k,v in pairs(keys) do if config.plugins.terminal.omit_escapes == nil or not k:find(config.plugins.terminal.omit_escapes) then non_omitted_keys[k] = v end end
+keymap.add(non_omitted_keys)
+
+if config.plugins.terminal.inversion_key then
+  local settings = {}
+  local commands = {}
+  for i = string.byte('a'), string.byte('z') do
+    local keymaps = {}
+    for i,v in ipairs(keymap.map["ctrl+" .. string.char(i)] or {}) do
+      if not v:find("terminal") then
+        table.insert(keymaps, "terminal:" .. v)
+        commands["terminal:" .. v] = function(...) command.perform(v, ...) end
+      end
+    end
+    if #keymaps > 0 then
+      settings["ctrl+" .. config.plugins.terminal.inversion_key .. "+" .. string.char(i)] = keymaps
+    end
+  end
+  command.add(active_terminal_predicate, commands)
+  keymap.add(settings)
+end
 
 return {
   class = TerminalView
