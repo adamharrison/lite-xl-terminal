@@ -21,7 +21,7 @@ config.plugins.terminal = common.merge({
   -- set to nil to disable entirely
   inversion_key = "shift",
   -- lua pattern for escape sequences to ignore. nil to target all escapes to terminal. example value would be "ctrl%+[nwpf]"
-  omit_escapes = "ctrl%+[nwpf]",
+  omit_escapes = nil,
   -- the default shell to boot up in
   shell = default_shell,
   -- the arguments to pass to your shell
