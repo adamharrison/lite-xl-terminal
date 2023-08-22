@@ -815,8 +815,10 @@ static int translate_charset(charset_e charset, int codepoint) {
 static int terminal_output(terminal_t* terminal, const char* str, int len) {
   if (terminal->debug)  {
     FILE* file = fopen("terminal.log", "ab");
-    fwrite(str, sizeof(char), len, file);
-    fclose(file);
+    if (file) {
+      fwrite(str, sizeof(char), len, file);
+      fclose(file);
+    }
   }
   unsigned int codepoint;
   int total_shifts = 0;
