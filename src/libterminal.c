@@ -1085,7 +1085,7 @@ static int set_error_step(const char* step) { strncpy(error_step, step, sizeof(e
     strcpy(error_buffer, error_step);
     int len = strlen(error_buffer);
     error_buffer[len++] = ' ';
-    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last_error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&error_buffer[len + 1], sizeof(error_buffer) - (len + 1), NULL);
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last_error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&error_buffer[len], sizeof(error_buffer) - (len + 1), NULL);
     return error_buffer;
   }
 #else
