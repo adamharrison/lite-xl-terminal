@@ -1129,7 +1129,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     si_ex.StartupInfo.hStdError = NULL;
     size_t list_size;
     // Create the appropriately sized thread attribute list
-    InitializeProcThreadAttributeList(NULL, 2, 0, &list_size)
+    InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
     si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
     BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
       UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
