@@ -1134,14 +1134,18 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
       UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
       UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
-    free(si_ex.lpAttributeList);
-    if (!success && set_error_step("update proc attribute list"))
+    if (!success && set_error_step("update proc attribute list")) {
+      DeleteProcThreadAttributeList(si_ex.lpAttributeList);
+      free(si_ex.lpAttributeList);
       goto error;
+    }
 
     int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
     wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
     len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
     success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
+    DeleteProcThreadAttributeList(si_ex.lpAttributeList);
+    free(si_ex.lpAttributeList);
     free(commandline);
     if (!success && set_error_step("create process"))
       goto error;
