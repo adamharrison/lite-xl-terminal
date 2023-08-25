@@ -1150,12 +1150,9 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       goto error;
     error:
     if (!terminal->nonblocking_thread) {
+      last_error_code = FAILED(result) ? HRESULT_CODE(result) : GetLastError();
       terminal_close(terminal);
       free(terminal);
-      if (FAILED(result))
-        last_error_code = HRESULT_CODE(result);
-      else
-        last_error_code = GetLastError();
       return NULL;
     }
   #else
