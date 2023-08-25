@@ -11,7 +11,7 @@ local StatusView = require "core.statusview"
 local terminal_native = require "plugins.terminal.libterminal"
 
 
-local default_shell = os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
+local default_shell = (PLATFORM == "Windows" and os.getenv("COMSPEC")) or os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
 config.plugins.terminal = common.merge({
   -- outputs a terminal.log file of all the output of your shell
   debug = false,
@@ -154,7 +154,7 @@ end
 
 
 function TerminalView:update()
-  if not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
+  if self.size.x > 0 and self.size.y > 0 and not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
     self.columns = math.max(math.floor((self.size.x - self.options.padding.x*2) / self.options.font:get_width("W")), 1)
     self.lines = math.max(math.floor((self.size.y - self.options.padding.y*2) / self.options.font:get_height()), 1)
     if self.lines > 0 and self.columns > 0 then
