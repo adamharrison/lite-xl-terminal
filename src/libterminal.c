@@ -1076,6 +1076,23 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   terminal->lines = lines;
 }
 
+static char error_step[64];
+static int set_error_step(const char* step) { strncpy(error_step, step, sizeof(error_step)); return 1; }
+#if _WIN32
+  long long last_error_code;
+  static const char* terminal_get_last_error() {
+    static char error_buffer[2048];
+    strcpy(error_buffer, error_step);
+    int len = strlen(error_buffer);
+    error_buffer[len++] = ' ';
+    FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last_error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&error_buffer[len + 1], sizeof(error_buffer) - (len + 1), NULL);
+    return error_buffer;
+  }
+#else
+  // TODO, non-windows error handling, but less important because windows will be failing lots more, 'cause it's shit.
+  static const char* terminal_get_last_error() { return error_step; }
+#endif
+
 static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* term_env, const char* pathname, const char** argv) {
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
   for (int i = 0; i < VIEW_MAX; ++i) {
@@ -1088,44 +1105,56 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
   }
   terminal->scrollback_limit = scrollback_limit;
   #ifdef _WIN32
+    last_error_code = 0;
+    HRESULT result = S_OK;
     SECURITY_ATTRIBUTES no_sec = { .nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE, .lpSecurityDescriptor = NULL };
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
-    BOOL success =
-      CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) &&
-      CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0) &&
-      !FAILED(CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon));
-    if (success) {
-      terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
+    if (!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0) && set_error_step("create pipes"))
+      goto error;
+    result = CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
+    if (!FAILED(result) && set_error_step("create pseudoconsole"))
+      goto error;
+    terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
+    if (!terminal->nonblocking_buffer_mutex && set_error_step("create mutex"))
+      goto error;
 
-      HANDLE handles_to_inherit[] = { in_pipe_pseudo_console_side, out_pipe_pseudo_console_side };
-      STARTUPINFOEXW si_ex = {0};
-      si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
-      si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-      si_ex.StartupInfo.hStdInput = NULL;
-      si_ex.StartupInfo.hStdOutput = NULL;
-      si_ex.StartupInfo.hStdError = NULL;
-      size_t list_size;
-      // Create the appropriately sized thread attribute list
-      InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
-      si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
-      success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
-        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
-        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
-      free(si_ex.lpAttributeList);
+    HANDLE handles_to_inherit[] = { in_pipe_pseudo_console_side, out_pipe_pseudo_console_side };
+    STARTUPINFOEXW si_ex = {0};
+    si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+    si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+    si_ex.StartupInfo.hStdInput = NULL;
+    si_ex.StartupInfo.hStdOutput = NULL;
+    si_ex.StartupInfo.hStdError = NULL;
+    size_t list_size;
+    // Create the appropriately sized thread attribute list
+    if (!InitializeProcThreadAttributeList(NULL, 2, 0, &list_size) && set_error_step("init proc attribute list"))
+      goto error;
+    si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
+    BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
+      UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
+      UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
+    free(si_ex.lpAttributeList);
+    if (!success && set_error_step("update proc attribute list"))
+      goto error;
 
-      if (success) {
-        int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
-        wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
-        len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-        success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
-        free(commandline);
-        if (success)
-          terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
-      }
-    }
-    if (!success) {
+    int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
+    wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
+    len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
+    success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
+    free(commandline);
+    if (!success && set_error_step("create process"))
+      goto error;
+    terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
+    if (!terminal->nonblocking_thread && set_error_step("create thread"))
+      goto error;
+    error:
+    if (!terminal->nonblocking_thread) {
       free(terminal);
+      if (FAILED(result))
+        last_error_code = HRESULT_CODE(result);
+      else
+        last_error_code = GetLastError();
       return NULL;
     }
   #else
@@ -1142,7 +1171,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     term.c_iflag |= IUTF8 | ICRNL | IXON;
     term.c_oflag |= OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
     terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
-    if (terminal->pid == -1) {
+    if (terminal->pid == -1 && set_error_step("forkpty")) {
       free(terminal);
       return NULL;
     }
@@ -1267,11 +1296,11 @@ static int f_terminal_new(lua_State* L) {
   }
   int debug = lua_toboolean(L, 7);
   terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments);
-  terminal->debug = debug;
   for (int i = 1; i < 256 && arguments[i]; ++i)
     free(arguments[i]);
   if (!terminal)
-    return luaL_error(L, "error creating terminal");
+    return luaL_error(L, "error creating terminal: %s", terminal_get_last_error());
+  terminal->debug = debug;
   lua_newtable(L);
   lua_pushlightuserdata(L, terminal);
   lua_setfield(L, -2, "__terminal");
