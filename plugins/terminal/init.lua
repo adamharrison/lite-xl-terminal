@@ -17,7 +17,7 @@ config.plugins.terminal = common.merge({
   debug = false,
   -- the TERM to present as.
   term = "xterm-256color",
-  -- pressing this key and ctrl will allow normal commands to be run that start with ctrl (ctrl+n, ctrl+w, etc..) whlie using the terminal
+  -- pressing this key and ctrl will allow normal commands to be run that start with ctrl (ctrl+n, ctrl+w, etc..) while using the terminal
   -- set to nil to disable entirely
   inversion_key = "shift",
   -- lua pattern for escape sequences to ignore. nil to target all escapes to terminal. example value would be "ctrl%+[nwpf]"
@@ -30,8 +30,7 @@ config.plugins.terminal = common.merge({
   scrolling_speed = 0.01,
   -- the newline character to use
   -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
-  -- doesn't allow you to newline if you don't set it to `\r`. `zsh` gives me personally some problems but
-  -- sems to work for others. Weird.
+  -- doesn't allow you to newline if you don't set it to `\r`.
   newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
   -- the backspace character to use
   backspace = "\x7F",
