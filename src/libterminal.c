@@ -1150,6 +1150,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       goto error;
     error:
     if (!terminal->nonblocking_thread) {
+      terminal_close(terminal);
       free(terminal);
       if (FAILED(result))
         last_error_code = HRESULT_CODE(result);
