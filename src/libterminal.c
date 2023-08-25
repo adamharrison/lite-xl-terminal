@@ -1111,7 +1111,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     SECURITY_ATTRIBUTES no_sec = { .nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE, .lpSecurityDescriptor = NULL };
     HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
     COORD size = { columns, lines };
-    if (!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0) && set_error_step("create pipes"))
+    if ((!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0)) && set_error_step("create pipes"))
       goto error;
     result = CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
     if (FAILED(result) && set_error_step("create pseudoconsole"))
