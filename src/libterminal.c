@@ -1113,7 +1113,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     if (!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0) && set_error_step("create pipes"))
       goto error;
     result = CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
-    if (!FAILED(result) && set_error_step("create pseudoconsole"))
+    if (FAILED(result) && set_error_step("create pseudoconsole"))
       goto error;
     terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
     if (!terminal->nonblocking_buffer_mutex && set_error_step("create mutex"))
