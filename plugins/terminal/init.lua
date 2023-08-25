@@ -11,7 +11,7 @@ local StatusView = require "core.statusview"
 local terminal_native = require "plugins.terminal.libterminal"
 
 
-local default_shell = (PLATFORM == "Windows" and os.getenv("COMSPEC")) or os.getenv("SHELL") or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
+local default_shell =  os.getenv("SHELL") or (PLATFORM == "Windows" and os.getenv("COMSPEC")) or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
 config.plugins.terminal = common.merge({
   -- outputs a terminal.log file of all the output of your shell
   debug = false,
