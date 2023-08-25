@@ -1084,6 +1084,7 @@ static int set_error_step(const char* step) { strncpy(error_step, step, sizeof(e
     static char error_buffer[2048];
     strcpy(error_buffer, error_step);
     int len = strlen(error_buffer);
+    error_buffer[len++] = ':';
     error_buffer[len++] = ' ';
     FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, last_error_code, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)&error_buffer[len], sizeof(error_buffer) - (len + 1), NULL);
     return error_buffer;
@@ -1128,8 +1129,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     si_ex.StartupInfo.hStdError = NULL;
     size_t list_size;
     // Create the appropriately sized thread attribute list
-    if (!InitializeProcThreadAttributeList(NULL, 2, 0, &list_size) && set_error_step("init proc attribute list"))
-      goto error;
+    InitializeProcThreadAttributeList(NULL, 2, 0, &list_size)
     si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
     BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
       UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
