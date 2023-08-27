@@ -48,6 +48,7 @@
 
 #define LIBTERMINAL_BACKBUFFER_PAGE_LINES 200
 #define LIBTERMINAL_CHUNK_SIZE 4096
+#define LIBTERMINAL_MAX_CHUNKS_PROCESSED 10
 #define LIBTERMINAL_MAX_LINE_WIDTH 1024
 #define LIBTERMINAL_NAME_MAX 256
 #define LIBTERMINAL_DEFAULT_TAB_SIZE 8
@@ -971,6 +972,7 @@ static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, vo
     ReleaseMutex(terminal->nonblocking_buffer_mutex);
     return at_least_one;
   #else
+    int chunks_processed = 0;
     do {
       len = read(terminal->master, chunk, sizeof(chunk));
       if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
@@ -979,7 +981,7 @@ static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, vo
       if (callback)
         callback(chunk, len, data);
       at_least_one = 1;
-    } while (len > 0);
+    } while (len > 0 && chunks_processed++ < LIBTERMINAL_MAX_CHUNKS_PROCESSED);
   #endif
   return -1;
 }
