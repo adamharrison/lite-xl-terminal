@@ -84,6 +84,14 @@ and place both the dll, and the `plugins/terminal/init.lua` from the source
 code archive into your lite-xl plugins directory as `plugins/terminal/init.lua`
 and `plugins/terminal/libterminal.x86_64-windows.dll`.
 
+### Stanalone
+
+If you want to use terminal as a standalone terminal, you can do:
+
+```
+lpm run terminal --config 'config.plugins.treeview=false config.plugins.workspace=false config.always_show_tabs=false core.add_thread(function() command.perform("terminal:open-tab") end)'
+```
+
 ## Status
 
 1.0 has been released. It should be functional on Windows 10+, Linux, and
