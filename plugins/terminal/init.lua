@@ -169,6 +169,7 @@ function TerminalView:update()
   if self.terminal then
     local exited = self.terminal:exited()
     if exited == false then
+      self.cursor = self.terminal:mouse_tracking_mode() and "arrow" or "ibeam"
       if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
         self.focused = core.active_view == self
         self.modified_since_last_focus = false
