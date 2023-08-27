@@ -117,6 +117,7 @@ function TerminalView:new(options)
   TerminalView.super.new(self)
   self.size.y = options.drawer_height
   self.options = options
+  self.cursor = "ibeam"
   self.inversion_pressed = false
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
