@@ -504,9 +504,6 @@ function TerminalView:get_text(line1, col1, line2, col2)
       end
       offset = offset + length
     end
-    if idx < line2 then
-      table.insert(full_buffer, "\n")
-    end
   end
   return table.concat(full_buffer)
 end

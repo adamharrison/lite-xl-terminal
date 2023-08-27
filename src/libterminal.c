@@ -150,6 +150,7 @@ typedef enum charset_e {
 
 typedef struct view_t {
   buffer_char_t* buffer;
+  int* overflows; // I don't like this, but as a result of how this is architected, this is necessary to ensure proper line outputs.
   int cursor_x, cursor_y;
   int cursor_styling_inversed;
   buffer_styling_t cursor_styling; // What characters are currently being emitted as.
@@ -324,7 +325,7 @@ static void terminal_shift_buffer(terminal_t* terminal) {
       free(page);
     }
     if (!terminal->scrollback_buffer_start || terminal->scrollback_buffer_start->columns != terminal->columns || terminal->scrollback_buffer_start->line >= terminal->scrollback_buffer_start->lines) {
-      backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t), 1);
+      backbuffer_page_t* page = calloc(sizeof(backbuffer_page_t) + LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->columns*sizeof(buffer_char_t) + sizeof(int)*LIBTERMINAL_BACKBUFFER_PAGE_LINES, 1);
       if (!terminal->scrollback_buffer_start)
         terminal->scrollback_buffer_end = page;
       backbuffer_page_t* prev = terminal->scrollback_buffer_start;
@@ -337,16 +338,21 @@ static void terminal_shift_buffer(terminal_t* terminal) {
       page->line = 0;
     }
     memcpy(&terminal->scrollback_buffer_start->buffer[terminal->scrollback_buffer_start->line * terminal->columns], &view->buffer[0], sizeof(buffer_char_t) * terminal->columns);
+    int* backbuffer_overflows = (int*)&terminal->scrollback_buffer_start->buffer[LIBTERMINAL_BACKBUFFER_PAGE_LINES*terminal->scrollback_buffer_start->columns];
+    backbuffer_overflows[terminal->scrollback_buffer_start->line] = view->overflows[0];
     terminal->scrollback_buffer_start->line++;
   }
   memmove(&view->buffer[0], &view->buffer[terminal->columns], sizeof(buffer_char_t) * terminal->columns * (terminal->lines - 1));
+  memmove(&view->overflows[0], &view->overflows[1], sizeof(int) * (terminal->lines - 1));
   memset(&view->buffer[terminal->columns * (terminal->lines - 1)], 0, sizeof(buffer_char_t) * terminal->columns);
+  view->overflows[terminal->lines - 1] = 0;
 }
 
 static void terminal_switch_buffer(terminal_t* terminal, view_e view) {
   terminal->current_view = view;
   if (view == VIEW_ALTERNATE_BUFFER) {
     memset(terminal->views[VIEW_ALTERNATE_BUFFER].buffer, 0, sizeof(buffer_char_t) * terminal->columns * terminal->lines);
+    memset(terminal->views[VIEW_ALTERNATE_BUFFER].overflows, 0, terminal->lines * sizeof(int));
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_x = 0;
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_y = 0;
     terminal->views[VIEW_ALTERNATE_BUFFER].cursor_styling = LIBTERMINAL_NO_STYLING;
@@ -878,6 +884,7 @@ static int terminal_output(terminal_t* terminal, const char* str, int len) {
           view->cursor_x = (view->cursor_x + view->tab_size) - ((view->cursor_x + view->tab_size) % view->tab_size);
         } break;
         case '\n': {
+          // So that we can copy text blocks properly.
           if (view->cursor_y < (end - 1))
             ++view->cursor_y;
           else {
@@ -916,6 +923,7 @@ static int terminal_output(terminal_t* terminal, const char* str, int len) {
           break;
         default:
           if (view->cursor_x >= terminal->columns) {
+            view->overflows[view->cursor_y] = 1;
             view->cursor_x = 0;
             if (view->cursor_y < (end - 1))
               ++view->cursor_y;
@@ -989,9 +997,12 @@ static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, vo
 static int terminal_close(terminal_t* terminal) {
   terminal_clear_scrollback_buffer(terminal);
   for (int i = 0; i < VIEW_MAX; ++i) {
-    if (terminal->views[i].buffer)
+    if (terminal->views[i].buffer) {
       free(terminal->views[i].buffer);
+      free(terminal->views[i].overflows);
+    }
     terminal->views[i].buffer = NULL;
+    terminal->views[i].overflows = NULL;
   }
   #if _WIN32
     if (terminal->nonblocking_thread)
@@ -1073,6 +1084,7 @@ static void terminal_resize(terminal_t* terminal, int columns, int lines) {
       terminal->views[i].scrolling_region_start = min(terminal->views[i].scrolling_region_start, lines - 1);
       terminal->views[i].scrolling_region_end = min(terminal->views[i].scrolling_region_end, lines);
     }
+    terminal->views[i].overflows = calloc(lines * sizeof(int), 1);
   }
   terminal->columns = columns;
   terminal->lines = lines;
@@ -1193,9 +1205,10 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
 }
 
 
-static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) {
+static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end, int overflows) {
   lua_newtable(L);
   int block_size = 0;
+  int last_nonzero_codepoint = 0;
   int group = 0;
   char text_buffer[LIBTERMINAL_MAX_LINE_WIDTH] = {0};
   buffer_styling_t style = start->styling;
@@ -1213,14 +1226,21 @@ static void output_line(lua_State* L, buffer_char_t* start, buffer_char_t* end) 
       );
       lua_pushinteger(L, packed);
       lua_rawseti(L, -2, ++group);
-      lua_pushlstring(L, text_buffer, block_size);
+      lua_pushlstring(L, text_buffer, last_nonzero_codepoint);
+      if (!overflows && start >= end) {
+        lua_pushliteral(L, "\n");
+        lua_concat(L, 2);
+      }
       lua_rawseti(L, -2, ++group);
       block_size = 0;
+      last_nonzero_codepoint = 0;
       if (start >= end)
         break;
       style = start->styling;
     }
     block_size += codepoint_to_utf8(start->codepoint != 0 ? start->codepoint : ' ', &text_buffer[block_size]);
+    if (start->codepoint != 0)
+      last_nonzero_codepoint = block_size;
     ++start;
   }
 }
@@ -1252,8 +1272,9 @@ static int f_terminal_lines(lua_State* L) {
     backbuffer_page_t* current_backbuffer = terminal_find_scrollback_page(terminal, terminal->scrollback_target, &offset, &top_offset);
     int lines_into_buffer = top_offset - offset;
     while (current_backbuffer) {
+      int* backbuffer_overflows = (int*)&current_backbuffer->buffer[LIBTERMINAL_BACKBUFFER_PAGE_LINES*current_backbuffer->columns];
       for (int y = lines_into_buffer; y < current_backbuffer->line; ++y) {
-        output_line(L, &current_backbuffer->buffer[y * current_backbuffer->columns], &current_backbuffer->buffer[(y+1) * current_backbuffer->columns]);
+        output_line(L, &current_backbuffer->buffer[y * current_backbuffer->columns], &current_backbuffer->buffer[(y+1) * current_backbuffer->columns], backbuffer_overflows[y]);
         lua_rawseti(L, -2, ++total_lines);
         if (remaining_lines == 0)
           break;
@@ -1266,7 +1287,7 @@ static int f_terminal_lines(lua_State* L) {
   if (remaining_lines > 0) {
     remaining_lines = min(remaining_lines, terminal->lines);
     for (int y = 0; y < remaining_lines; ++y) {
-      output_line(L, &view->buffer[(y + start) * terminal->columns], &view->buffer[(y + start + 1) * terminal->columns]);
+      output_line(L, &view->buffer[(y + start) * terminal->columns], &view->buffer[(y + start + 1) * terminal->columns], view->overflows[y + start]);
       lua_rawseti(L, -2, ++total_lines);
     }
   }
