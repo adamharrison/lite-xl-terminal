@@ -308,7 +308,11 @@ function TerminalView:draw()
 end
 
 function TerminalView:convert_coordinates(x, y)
-  return math.max(math.floor((x - self.position.x - self.options.padding.x) / self.options.font:get_width(" ")), 0), math.max(math.floor((y - self.position.y - self.options.padding.y) / self.options.font:get_height()), 0)
+  local w = self.options.font:get_width(" ")
+  local col_exact = math.floor((x - self.position.x - self.options.padding.x) / w)
+  local col_approx = common.round((x - self.position.x - self.options.padding.x) / w)
+  local row = math.floor((y - self.position.y - self.options.padding.y) / self.options.font:get_height())
+  return math.max(0, col_exact), math.max(0, row), math.max(0, col_approx)
 end
 
 function TerminalView:get_word_boundaries(col, row)
@@ -387,11 +391,11 @@ function TerminalView:on_mouse_moved(x, y, dx, dy)
     else
       self.scrolling_offscreen = nil
     end
-    local col, line = self:convert_coordinates(x, y)
+    local col, line, col_approx = self:convert_coordinates(x, y)
     local scrollback = self.terminal:scrollback()
-    if not self.selection then self.selection = { col, line - scrollback } end
+    if not self.selection then self.selection = { col_approx, line - scrollback } end
     if not self.word_selecting and not self.row_selecting then
-      self.selection[3] = col
+      self.selection[3] = col_approx
       self.selection[4] = line - scrollback
     elseif self.word_selecting then
       local col1, line1, col2, line2 = self:get_word_boundaries(col, line)
