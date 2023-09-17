@@ -86,17 +86,16 @@ and `plugins/terminal/libterminal.x86_64-windows.dll`.
 
 ### Stanalone
 
-If you want to use terminal as a standalone terminal, you can do:
+If you want to use terminal as a standalone terminal, here's a handy script you can use:
 
 ```
-lpm run terminal --config 'config.plugins.treeview=false config.plugins.workspace=false config.always_show_tabs=false core.add_thread(function() command.perform("terminal:open-tab") end)'
+LITE_SCALE=1 lpm run terminal --config 'config.plugins.treeview=false config.plugins.workspace=false config.always_show_tabs=false local _,_,x,y = system.get_window_size() system.set_window_size(800, 500, x, y) local TerminalView = require "plugins.terminal".class local old_close = TerminalView.close function TerminalView:close() old_close(self) os.exit(0) end core.add_thread(function() command.perform("terminal:open-tab") local node = core.root_view.root_node:get_node_for_view(core.status_view) node:close_view(core.root_view.root_node, core.status_view) end)'
 ```
 
 ## Status
 
 1.0 has been released. It should be functional on Windows 10+, Linux, and
 MacOS.
-
 
 ## Building
 

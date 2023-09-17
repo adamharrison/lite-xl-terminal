@@ -51,10 +51,13 @@ config.plugins.terminal = common.merge({
   -- show bold text in bright colors
   bold_text_in_bright_colors = true,
   colors = {
+    -- You can customize these without many repercussions.
     [  0] = { common.color "#000000" }, [  1] = { common.color "#aa0000" }, [  2] = { common.color "#44aa44" }, [  3] = { common.color "#aa5500" }, [  4] = { common.color "#0039aa" },
     [  5] = { common.color "#aa22aa" }, [  6] = { common.color "#1a92aa" }, [  7] = { common.color "#aaaaaa" }, [  8] = { common.color "#777777" }, [  9] = { common.color "#ff8787" },
     [ 10] = { common.color "#4ce64c" }, [ 11] = { common.color "#ded82c" }, [ 12] = { common.color "#295fcc" }, [ 13] = { common.color "#cc58cc" }, [ 14] = { common.color "#4ccce6" },
-    [ 15] = { common.color "#ffffff" }, [ 16] = { common.color "#000000" }, [ 17] = { common.color "#00005f" }, [ 18] = { common.color "#000087" }, [ 19] = { common.color "#0000af" },
+    [ 15] = { common.color "#ffffff" },
+    -- You can't customize these without repercussions.
+    [ 16] = { common.color "#000000" }, [ 17] = { common.color "#00005f" }, [ 18] = { common.color "#000087" }, [ 19] = { common.color "#0000af" },
     [ 20] = { common.color "#0000d7" }, [ 21] = { common.color "#0000ff" }, [ 22] = { common.color "#005f00" }, [ 23] = { common.color "#005f5f" }, [ 24] = { common.color "#005f87" },
     [ 25] = { common.color "#005faf" }, [ 26] = { common.color "#005fd7" }, [ 27] = { common.color "#005fff" }, [ 28] = { common.color "#008700" }, [ 29] = { common.color "#00875f" },
     [ 30] = { common.color "#008787" }, [ 31] = { common.color "#0087af" }, [ 32] = { common.color "#0087d7" }, [ 33] = { common.color "#0087ff" }, [ 34] = { common.color "#00af00" },
@@ -264,20 +267,22 @@ function TerminalView:draw()
         end
       end
       local offset = 0
+      local foreground, background, text_style
       for i = 1, #line, 2 do
-        local background = self:convert_color(line[i] & 0xFFFFFFFF, "background")
-        local foreground, style = self:convert_color(line[i] >> 32, "foreground", self.options.bold_text_in_bright_colors)
-        local font = (((style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
+        background = self:convert_color(line[i] & 0xFFFFFFFF, "background")
+        foreground, text_style = self:convert_color(line[i] >> 32, "foreground", self.options.bold_text_in_bright_colors)
+        local font = (((text_style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = text:ulen()
         local valid_utf8 = length ~= nil
-        local subfunc = string.usub
+        local subfunc, lengthfunc = string.usub, string.ulen
         if not valid_utf8 then
           length = #text
+          lengthfunc = function(str) return #str end
           subfunc = string.sub
         end
         local idx = (line_idx - 1) - self.terminal:scrollback()
-        local sections
+        local sections = { { background, foreground, text } }
         if selection then
           if ((idx == selection[2] and selection[1] <= offset) or selection[2] < idx) and (selection[4] > idx or (idx == selection[4] and (selection[3] >= offset + length))) then -- overlaps all
             sections = { { foreground, background, text } }
@@ -289,17 +294,38 @@ function TerminalView:draw()
             sections = { { background, foreground, subfunc(text, 1, selection[1] - offset) }, { foreground, background, subfunc(text, selection[1] - offset + 1, length) } }
           end
         end
-        for i, section in ipairs(sections or { { background, foreground, text } }) do
-          local background, foreground, text = table.unpack(section)
-          if background and background ~= self.options.background then
-            renderer.draw_rect(x, y, (text:ulen() or #text)*space_width, lh, background)
+        -- split sections further, to insert an inverted bit for the cursor
+        if should_draw_cursor and cursor_x >= offset and cursor_x < offset + length then
+          local local_offset = offset
+          for i,v in ipairs(sections) do
+            local len = lengthfunc(v[3])
+            if cursor_x >= local_offset and cursor_x < local_offset + len then
+              sections[i] = nil
+              local target = i
+              if cursor_x ~= local_offset then
+                table.insert(sections, target, { v[1], v[2], subfunc(v[3], 1, cursor_x - local_offset) })
+                target = target + 1
+              end
+              table.insert(sections, target, { v[2], v[1], subfunc(v[3], cursor_x - local_offset + 1, cursor_x - local_offset + 1) })
+              target = target + 1
+              if cursor_x ~= local_offset + len - 1 then
+                table.insert(sections, target, { v[1], v[2], subfunc(v[3], cursor_x - local_offset + 2) })
+              end
+              break
+            end
+            local_offset = local_offset + len
           end
-          x = renderer.draw_text(font, text, x, y, foreground)
+        end
+        for i, section in ipairs(sections) do
+          if section then
+            local background, foreground, text = table.unpack(section)
+            if background and background ~= self.options.background then
+              renderer.draw_rect(x, y, (text:ulen() or #text)*space_width, lh, background)
+            end
+            x = renderer.draw_text(font, text, x, y, foreground)
+          end
         end
         offset = offset + length
-      end
-      if should_draw_cursor then
-        renderer.draw_rect(self.position.x + self.options.padding.x + cursor_x * space_width, y, space_width, lh, style.accent)
       end
       y = y + lh
     end
