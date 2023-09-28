@@ -196,6 +196,7 @@ typedef struct {
     int nonblocking_buffer_length;
     HANDLE nonblocking_buffer_mutex;
     HANDLE nonblocking_thread;
+    int closing;
   #else
     int master;                                        // FD for pty.
     pid_t pid;                                         // pid for shell.
@@ -950,7 +951,14 @@ static int terminal_output(terminal_t* terminal, const char* str, int len) {
     char chunk_buffer[LIBTERMINAL_CHUNK_SIZE];
     while (1) {
       DWORD bytes_read;
-      if (sizeof(chunk_buffer) - terminal->nonblocking_buffer_length > 0) {
+      if (sizeof(chunk_buffer) - terminal->nonblocking_buffer_length > 0 || terminal->closing) {
+        if (terminal->closing) {
+          while (1) {
+            if (!ReadFile(terminal->frompty, chunk_buffer, sizeof(chunk_buffer), &bytes_read, NULL) || bytes_read == 0)
+              break;
+          }
+          return 0;
+        }
         if (!ReadFile(terminal->frompty, chunk_buffer, sizeof(chunk_buffer) - terminal->nonblocking_buffer_length, &bytes_read, NULL))
           break;
         if (bytes_read > 0) {
@@ -962,6 +970,7 @@ static int terminal_output(terminal_t* terminal, const char* str, int len) {
       }
       Sleep(1);
     }
+    return 0;
   }
 #endif
 
@@ -1005,8 +1014,17 @@ static int terminal_close(terminal_t* terminal) {
     terminal->views[i].overflows = NULL;
   }
   #if _WIN32
-    if (terminal->nonblocking_thread)
+    // This has to be first, because if we don't drain the buffer in our nonblocking_thread,
+    // this call can hang. (SIGH).
+    terminal->closing = 1;
+    if (terminal->hpcon) {
+      ClosePseudoConsole(terminal->hpcon);
+      terminal->hpcon = NULL;
+    }
+    if (terminal->nonblocking_thread) {
       TerminateThread(terminal->nonblocking_thread, 0);
+      terminal->nonblocking_thread = NULL;
+    }
     if (terminal->topty) {
       CloseHandle(terminal->topty);
       terminal->topty = NULL;
@@ -1014,10 +1032,6 @@ static int terminal_close(terminal_t* terminal) {
     if (terminal->frompty) {
       CloseHandle(terminal->frompty);
       terminal->frompty = NULL;
-    }
-    if (terminal->hpcon) {
-      ClosePseudoConsole(terminal->hpcon);
-      terminal->hpcon = NULL;
     }
     if (terminal->nonblocking_buffer_mutex) {
       CloseHandle(terminal->nonblocking_buffer_mutex);
