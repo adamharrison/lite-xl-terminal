@@ -108,7 +108,7 @@ config.plugins.terminal = common.merge({
     [255] = { common.color "#eeeeee" }
   }
 }, config.plugins.terminal)
-if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = style.code_font:copy(style.code_font:get_size(), { smoothing = true }) end
+if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = config.plugins.terminal.font:copy(style.code_font:get_size(), { smoothing = true }) end
 
 
 local TerminalView = View:extend()
