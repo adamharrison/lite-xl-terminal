@@ -32,7 +32,7 @@ By default, will use `$SHELL` as your shell if present. If not, we will use
 You can activate the terminal as a docked view at the bottom of your editor by
 either pressing `alt+t`, or running the `Terminal: Toggle Drawer` command.
 
-You can also put a `TerminalView` into your main viewing pane by using `ctrl+shift\``
+You can also put a `TerminalView` into your main viewing pane by using ``ctrl+shift+```
 or by running the `Terminal: Open Tab` command. It can be closed with
 `ctrl+shift+w`.
 
