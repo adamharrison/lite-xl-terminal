@@ -1,66 +1,99 @@
 name: CI
 on: { push: { branches: [master] } }
 jobs:
-  build_linux_windows:
-    permissions: write-all
+  version:
     runs-on: ubuntu-latest
-    container: ghcr.io/lite-xl/lite-xl-build-box:latest
-    defaults: { run: { shell: bash } }
+    outputs:
+      version: ${{ steps.setup_release.outputs.version }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with: { fetch-depth: 0 }
-      - name: Set Environment Variables
-        run: |
-          git config --global user.name "Github Actions" && git config --global user.email "adamdharrison@gmail.com"
-          echo VERSION=`git describe --tags --abbrev=0 --match "v*" | tail -c +2` >> $GITHUB_ENV
-      - name: Clone Submodules
-        run: git submodule update --init --depth=1
-      - name: Build Linux
-        run: |
-          BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-linux'"'
-      - name: Build Windows
-        run: |
-          sudo apt-get install mingw-w64
-          BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-windows'"'
-      - name: Create Release(s)
+      - name: Setup Release
+        id: setup_release
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
+          export VERSION=`git describe --tags --match "v*" | tail -c +2`
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building terminal version $VERSION."
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
-            gh release delete -y v$VERSION || true;
-            gh release create -t v$VERSION v$VERSION *.so *.dll
-            gh release delete -y latest || true;
-            gh release create -t latest latest *.so *.dll
+            gh release delete -y v$VERSION || true; gh release create -t v$VERSION v$VERSION
+            gh release delete -y latest || true; gh release create -t latest latest
           fi
-          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous *.so *.dll
+          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous
+
+  build_linux:
+    needs: [version]
+    permissions: write-all
+    runs-on: ubuntu-latest
+    defaults: { run: { shell: bash } }
+    container: ghcr.io/lite-xl/lite-xl-build-box:latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with: { fetch-depth: 0, submodules: true }
+      - name: Build Linux
+        run: BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-linux'"'
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with: { name: "Linux", path: "*.so" }
+
+  build_windows:
+    needs: [version]
+    permissions: write-all
+    runs-on: ubuntu-latest
+    defaults: { run: { shell: bash } }
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with: { fetch-depth: 0, submodules: true }
+      - name: Build Windows
+        env: { GITHUB_TOKEN: "${{ github.token }}" }
+        run: sudo apt-get install mingw-w64 && BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-windows'"'
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with: { name: "Windows", path: "*.dll" }
 
   build_macos:
-    needs: build_linux_windows
+    needs: [version]
     runs-on: macos-11
     env:
       CC: clang
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
-        with: { fetch-depth: 0 }
-      - name: Set Environment Variables
-        run: echo VERSION=`git describe --tags --abbrev=0  --match "v*" | tail -c +2` >> $GITHUB_ENV
-      - name: Clone Submodules
-        run: git submodule update --init --depth=1
+        with: { fetch-depth: 0, submodules: true }
       - name: Build MacOS
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
           ./build.sh clean
-          BIN=libterminal.x86_64-darwin.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-darwin'"'
-          BIN=libterminal.aarch64-darwin.so CC=clang CFLAGS="-arch arm64" ./build.sh -O3 -DLIBTERMINAL_VERSION='"'$VERSION-x86_64-darwin'"'
-          gh release upload continuous *.so
-          if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
-            gh release upload v$VERSION *.so
-            gh release upload latest *.so
-            git branch -f latest HEAD
-            git tag -f latest
-            git push -f origin refs/heads/latest
-            git push -f origin refs/tags/latest
-          fi
-          git tag -f continuous
-          git push -f origin refs/tags/continuous
+          BIN=libterminal.x86_64-darwin.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-darwin'"'
+          BIN=libterminal.aarch64-darwin.so CC=clang CFLAGS="-arch arm64" ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-darwin'"'
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with: { name: "MacOS", path: "*.so" }
+
+
+  finalize:
+    needs: [build_macos, build_linux, build_windows]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+    - name: Download Artifacts
+      uses: actions/download-artifact@v3
+      with: { path: "." }
+    - name: Finalize Tags
+      env: { GITHUB_TOKEN: "${{ github.token }}" }
+      run: |
+        if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
+          gh release upload v${{ needs.version.outputs.version }} Linux/*.so MacOS/*.so Windows/*.dll
+          gh release upload latest Linux/*.so MacOS/*.so Windows/*.dll
+          git branch -f latest HEAD
+          git tag -f latest
+          git push -f origin refs/heads/latest
+          git push -f origin refs/tags/latest
+        fi
+        gh release upload continuous Linux/*.so MacOS/*.so Windows/*.dll
+        git tag -f continuous
+        git push -f origin refs/tags/continuous
