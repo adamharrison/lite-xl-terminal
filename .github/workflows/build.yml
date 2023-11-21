@@ -4,6 +4,7 @@ jobs:
   build_linux_windows:
     permissions: write-all
     runs-on: ubuntu-latest
+    container: ghcr.io/lite-xl/lite-xl-build-box:latest
     defaults: { run: { shell: bash } }
     steps:
       - name: Checkout Code
