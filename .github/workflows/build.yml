@@ -75,7 +75,7 @@ jobs:
 
 
   finalize:
-    needs: [build_macos, build_linux, build_windows]
+    needs: [version, build_macos, build_linux, build_windows]
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
