@@ -80,6 +80,7 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
+      with: { fetch-depth: 0 }
     - name: Download Artifacts
       uses: actions/download-artifact@v3
       with: { path: "." }
