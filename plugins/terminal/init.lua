@@ -660,7 +660,7 @@ command.add(nil, {
     end
   end,
   ["terminal:execute"] = function(text)
-    if not core.terminal_view then command.perform("terminal:toggle") end
+    if not core.terminal_view then command.perform("terminal:toggle-drawer") end
     local target_view = core.active_view:is(TerminalView) and core.active_view or core.terminal_view
     if not text then
       core.command_view:enter("Execute Command", { submit = function(text) target_view:input(text .. target_view.options.newline) end })
