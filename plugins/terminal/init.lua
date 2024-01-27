@@ -45,9 +45,9 @@ config.plugins.terminal = common.merge({
   -- padding around the edges of the terminal
   padding = { x = 0, y = 0 },
   -- default background color if not explicitly set by the shell
-  background = { common.color "#000000" },
-  -- default text color if not explicitly by the shell
-  text = { common.color "#FFFFFF" },
+  background = { common.color "#252529" },
+  -- default text color if not explicitly set by the shell
+  text = { common.color "#97979c" },
   -- show bold text in bright colors
   bold_text_in_bright_colors = true,
   colors = {
