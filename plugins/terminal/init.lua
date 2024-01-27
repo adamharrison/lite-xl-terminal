@@ -43,7 +43,8 @@ config.plugins.terminal = common.merge({
   -- the default console font. non-monsospace is unsupported
   font = style.code_font,
   -- padding around the edges of the terminal
-  padding = { x = 0, y = 0 },
+  -- by default use the style's padding but smaller
+  padding = { x = style.padding.x / 2, y = style.padding.y / 2 },
   -- default background color if not explicitly set by the shell
   background = { common.color "#000000" },
   -- default text color if not explicitly by the shell
