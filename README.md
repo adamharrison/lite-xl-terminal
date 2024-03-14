@@ -20,8 +20,7 @@ A simple, and straightforward integrated terminal that presents itself as
 8. UTF-8 support.
 9. Terminal resizing.
 10. Locked scrollback regions.
-11. Copying from terminal.
-12. And more!
+11. And more!
 
 By default, will use `$SHELL` as your shell if present. If not, we will use
 `sh` on linux and mac (though this is configurable), and
