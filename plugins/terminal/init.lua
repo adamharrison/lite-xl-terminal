@@ -45,11 +45,13 @@ config.plugins.terminal = common.merge({
   -- padding around the edges of the terminal
   padding = { x = 0, y = 0 },
   -- default background color if not explicitly set by the shell
-  background = { common.color "#000000" },
+  background = style.background or { common.color "#000000" },
   -- default text color if not explicitly by the shell
-  text = { common.color "#FFFFFF" },
+  text = style.syntax and style.syntax.normal or { common.color "#FFFFFF" },
   -- show bold text in bright colors
   bold_text_in_bright_colors = true,
+  -- set to 0 to disable color adjustments based on background
+  minimum_contrast_ratio = 1,
   colors = {
     -- You can customize these without many repercussions.
     [  0] = { common.color "#000000" }, [  1] = { common.color "#aa0000" }, [  2] = { common.color "#44aa44" }, [  3] = { common.color "#aa5500" }, [  4] = { common.color "#0039aa" },
@@ -109,6 +111,88 @@ config.plugins.terminal = common.merge({
   }
 }, config.plugins.terminal)
 if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = config.plugins.terminal.font:copy(style.code_font:get_size(), { smoothing = true }) end
+
+-- contrast functions pulled from https://github.com/xtermjs/xterm.js/blob/99df13b085aecb051f1373c5b7f8e819c4f41442/src/common/Color.ts#L285.
+local function contrastRatio(l1, l2)
+  if l1 < l2 then return (l2 + 0.05) / (l1 + 0.05) end
+  return (l1 + 0.05) / (l2 + 0.05)
+end
+
+local function relativeLuminance(color)
+  local rs = color[1] / 255
+  local gs = color[2] / 255
+  local bs = color[3] / 255
+  local rr = rs <= 0.03928 and rs / 12.92 or math.pow((rs + 0.055) / 1.055, 2.4)
+  local rg = gs <= 0.03928 and gs / 12.92 or math.pow((gs + 0.055) / 1.055, 2.4)
+  local rb = bs <= 0.03928 and bs / 12.92 or math.pow((bs + 0.055) / 1.055, 2.4)
+  return rr * 0.2126 + rg * 0.7152 + rb * 0.0722
+end
+
+local function reduceLuminance(bg, fg, ratio)
+  local bgL = relativeLuminance(bg)
+  local cr = contrastRatio(relativeLuminance(fg), bgL)
+  local nFg = { table.unpack(fg) }
+  while cr < ratio and (nFg[1] > 0 or nFg[2] > 0 or nFg[3] > 0) do
+    -- Reduce by 10% until the ratio is hit
+    nFg[1] = nFg[1] - math.max(0, math.ceil(nFg[1] * 0.1))
+    nFg[2] = nFg[2] - math.max(0, math.ceil(nFg[2] * 0.1))
+    nFg[3] = nFg[3] - math.max(0, math.ceil(nFg[3] * 0.1))
+    cr = contrastRatio(relativeLuminance(nFg), bgL)
+  end
+  return nFg
+end
+
+local function increaseLuminance(bg, fg, ratio)
+  local bgL = relativeLuminance(bg)
+  local cr = contrastRatio(relativeLuminance(fg), bgL)
+  local nFg = { table.unpack(fg) }
+  local cr = contrastRatio(relativeLuminance(nFg), bgL)
+  while cr < ratio and (nFg[1] < 0xFF or nFg[2] < 0xFF or nFg[3] < 0xFF) do
+    -- Increase by 10% until the ratio is hit
+    nFg[1] = math.min(0xFF, nFg[1] + math.ceil((255 - nFg[1]) * 0.1))
+    nFg[2] = math.min(0xFF, nFg[2] + math.ceil((255 - nFg[2]) * 0.1))
+    nFg[3] = math.min(0xFF, nFg[3] + math.ceil((255 - nFg[3]) * 0.1))
+    cr = contrastRatio(relativeLuminance(nFg), bgL)
+  end
+  return nFg
+end
+
+local function ensureContrastRatio(bg, fg, ratio)
+  local bgL = relativeLuminance(bg)
+  local fgL = relativeLuminance(fg)
+  local cr = contrastRatio(bgL, fgL)
+  if cr < ratio then
+    if fgL < bgL then
+      local resultA = reduceLuminance(bg, fg, ratio)
+      local resultARatio = contrastRatio(bgL, relativeLuminance(resultA))
+      if resultARatio < ratio then
+        local resultB = increaseLuminance(bg, fg, ratio)
+        local resultBRatio = contrastRatio(bgL, relativeLuminance(resultB))
+        return resultARatio > resultBRatio and resultA or resultB
+      end
+      return resultA
+    end
+    local resultA = increaseLuminance(bg, fg, ratio)
+    local resultARatio = contrastRatio(bgL, relativeLuminance(resultA))
+    if resultARatio < ratio then
+      local resultB = reduceLuminance(bg, fg, ratio)
+      local resultBRatio = contrastRatio(bgL, relativeLuminance(resultB))
+      return resultARatio > resultBRatio and resultA or resultB
+    end
+    return resultA
+  end
+  return fg
+end
+
+
+if config.plugins.terminal.minimum_contrast_ratio > 0 then
+  local bg = config.plugins.terminal.background
+  local text = config.plugins.terminal.text
+  config.plugins.terminal.text = ensureContrastRatio(bg, text, config.plugins.terminal.minimum_contrast_ratio)
+  for i = 1, 16 do
+    config.plugins.terminal.colors[i] = ensureContrastRatio(bg, config.plugins.terminal.colors[i], config.plugins.terminal.minimum_contrast_ratio)
+  end
+end
 
 
 local TerminalView = View:extend()

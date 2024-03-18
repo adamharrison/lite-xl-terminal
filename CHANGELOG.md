@@ -1,4 +1,17 @@
-## 1.0
+# 1.02
+
+* Changed default color scheme to reflect that of the editor.
+* Added in `minimum_contrast_ratio`, in order to ensure that the terminal automatic colors are visible for the primary text color, and the main 16 customizable colors.
+
+
+# 1.01
+
+* Added in the ability to distinguish when a line in the backbuffer is overflowing. Not perfect, but should lead to better copying behaviour.
+* Added in some comments to the config.
+* Made selections function smoother.
+* Made cursor an `ibeam` when appropriate.
+
+# 1.0
 
 A simple, and straightforward integrated terminal that presents itself as
 `xterm-256color`. Supports:

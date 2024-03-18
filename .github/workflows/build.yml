@@ -16,11 +16,12 @@ jobs:
           export VERSION=`git describe --tags --match "v*" | tail -c +2`
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Building terminal version $VERSION."
+          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md | tail -n +2 > NOTES.md
           if [[ `git tag --points-at HEAD | head -c 1` == "v" ]]; then
             gh release delete -y v$VERSION || true; gh release create -t v$VERSION v$VERSION
             gh release delete -y latest || true; gh release create -t latest latest
           fi
-          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous
+          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous -F NOTES.md
 
   build_linux:
     needs: [version]
@@ -77,6 +78,7 @@ jobs:
   finalize:
     needs: [version, build_macos, build_linux, build_windows]
     runs-on: ubuntu-latest
+    environment: Release
     steps:
     - name: Checkout Code
       uses: actions/checkout@v3
@@ -98,3 +100,9 @@ jobs:
         gh release upload continuous Linux/*.so MacOS/*.so Windows/*.dll
         git tag -f continuous
         git push -f origin refs/tags/continuous
+        if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
+          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*${{ needs.version.outputs.version }}/' < CHANGELOG.md | tail -n +2 > NOTES.md
+          perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Terminal v${{ needs.version.outputs.version }} has been released!\nhttps://github.com/adamharrison/lite-xl-terminal/releases/tag/v${{ needs.version.outputs.version }}\n\n### Changes in ${{ needs.version.outputs.version }}:\n" . <> })' < NOTES.md |
+            curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
+        fi
+
