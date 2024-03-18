@@ -100,9 +100,13 @@ jobs:
         gh release upload continuous Linux/*.so MacOS/*.so Windows/*.dll
         git tag -f continuous
         git push -f origin refs/tags/continuous
+    - name: Discord Webhook
+      env: { DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}" }
+      run: |
         if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
           perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*${{ needs.version.outputs.version }}/' < CHANGELOG.md | tail -n +2 > NOTES.md
           perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Terminal v${{ needs.version.outputs.version }} has been released!\nhttps://github.com/adamharrison/lite-xl-terminal/releases/tag/v${{ needs.version.outputs.version }}\n\n### Changes in ${{ needs.version.outputs.version }}:\n" . <> })' < NOTES.md |
             curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
         fi
+
 
