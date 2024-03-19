@@ -1,7 +1,7 @@
 {
    "addons" : [
       {
-         "description" : "An integrated terminal for lite-xl.",
+         "description" : "An integrated terminal for lite-xl. *([screenshot](https://github.com/adamharrison/lite-xl-terminal/assets/1034518/eb8a72a0-ff61-4b95-b009-364ac2725f70))*",
          "files" : [
             {
                "arch" : "x86_64-linux",
