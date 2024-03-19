@@ -5,28 +5,28 @@
          "files" : [
             {
                "arch" : "x86_64-linux",
-               "checksum" : "eafe4ea692d4dc8276e59d1028b94faf1a811298120941ba3dd5ba8b7eabfb68",
-               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.01/libterminal.x86_64-linux.so"
+               "checksum" : "2c742b98469642bc683b00c7a1f5185746b86548118d3194f9a0f6129ff4125d",
+               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.02/libterminal.x86_64-linux.so"
             },
             {
                "arch" : "x86_64-darwin",
-               "checksum" : "ef07c3c5de7516a20ea1f578f4cf8d52a5c30dd7f65e00ea4515d73ea645fe5e",
-               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.01/libterminal.x86_64-darwin.so"
+               "checksum" : "5b5928e721242b6582239442fa46f361688a0319a02371457f0ea562e9730d44",
+               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.02/libterminal.x86_64-darwin.so"
             },
             {
                "arch" : "aarch64-darwin",
-               "checksum" : "237aaa401238dd02c9b5a161237934de739018b45effe08c8a040577932d50e3",
-               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.01/libterminal.aarch64-darwin.so"
+               "checksum" : "bcfe13dd078afdc9a454cd29126f5f7051c0dbfa0154104587812400497bc849",
+               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.02/libterminal.aarch64-darwin.so"
             },
             {
                "arch" : "x86_64-windows",
-               "checksum" : "6a4c486e87a0f339ef93d890075b9666f6f61d634e8d7a620bfae8c290e6ae31",
-               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.01/libterminal.x86_64-windows.dll"
+               "checksum" : "e1cc1ad4b7b4bb9fe24f5a1acbf63b5883b77875b28075a12a5886ddb15347aa",
+               "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.02/libterminal.x86_64-windows.dll"
             }
          ],
          "id" : "terminal",
          "path" : "plugins/terminal",
-         "version" : "1.01"
+         "version" : "1.02"
       }
    ]
 }
