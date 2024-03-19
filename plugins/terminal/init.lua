@@ -51,7 +51,7 @@ config.plugins.terminal = common.merge({
   -- show bold text in bright colors
   bold_text_in_bright_colors = true,
   -- set to 0 to disable color adjustments based on background
-  minimum_contrast_ratio = 1,
+  minimum_contrast_ratio = 3,
   colors = {
     -- You can customize these without many repercussions.
     [  0] = { common.color "#000000" }, [  1] = { common.color "#aa0000" }, [  2] = { common.color "#44aa44" }, [  3] = { common.color "#aa5500" }, [  4] = { common.color "#0039aa" },
@@ -184,15 +184,6 @@ local function ensureContrastRatio(bg, fg, ratio)
   return fg
 end
 
-
-if config.plugins.terminal.minimum_contrast_ratio > 0 then
-  local bg = config.plugins.terminal.background
-  local text = config.plugins.terminal.text
-  config.plugins.terminal.text = ensureContrastRatio(bg, text, config.plugins.terminal.minimum_contrast_ratio)
-  for i = 1, 16 do
-    config.plugins.terminal.colors[i] = ensureContrastRatio(bg, config.plugins.terminal.colors[i], config.plugins.terminal.minimum_contrast_ratio)
-  end
-end
 
 
 local TerminalView = View:extend()
@@ -330,6 +321,8 @@ function TerminalView:sorted_selection()
   return selection
 end
 
+
+local contrast_foreground = {}
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
@@ -360,6 +353,14 @@ function TerminalView:draw()
       for i = 1, #line, 2 do
         background = self:convert_color(line[i] & 0xFFFFFFFF, "background")
         foreground, text_style = self:convert_color(line[i] >> 32, "foreground", self.options.bold_text_in_bright_colors)
+
+        if config.plugins.terminal.minimum_contrast_ratio > 0 then
+          if not contrast_foreground[line[i]] then
+            contrast_foreground[line[i]] = ensureContrastRatio(background, foreground, config.plugins.terminal.minimum_contrast_ratio)
+          end
+          foreground = contrast_foreground[line[i]]
+        end
+        
         local font = (((text_style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = text:ulen()
