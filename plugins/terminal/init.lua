@@ -122,9 +122,9 @@ local function relativeLuminance(color)
   local rs = color[1] / 255
   local gs = color[2] / 255
   local bs = color[3] / 255
-  local rr = rs <= 0.03928 and rs / 12.92 or math.pow((rs + 0.055) / 1.055, 2.4)
-  local rg = gs <= 0.03928 and gs / 12.92 or math.pow((gs + 0.055) / 1.055, 2.4)
-  local rb = bs <= 0.03928 and bs / 12.92 or math.pow((bs + 0.055) / 1.055, 2.4)
+  local rr = rs <= 0.03928 and rs / 12.92 or (((rs + 0.055) / 1.055) ^ 2.4)
+  local rg = gs <= 0.03928 and gs / 12.92 or (((gs + 0.055) / 1.055) ^ 2.4)
+  local rb = bs <= 0.03928 and bs / 12.92 or (((bs + 0.055) / 1.055) ^ 2.4)
   return rr * 0.2126 + rg * 0.7152 + rb * 0.0722
 end
 
