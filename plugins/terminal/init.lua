@@ -630,7 +630,10 @@ end
 
 
 command.add(function(amount)
-  local view = core.root_view.overlapping_view or core.active_view
+  -- core.root_view.overlapping_view is not in any release yet (as of 2.1.3)
+  local view = core.root_view.overlapping_view
+                or (core.root_view.overlapping_node and core.root_view.overlapping_node.active_view)
+                or core.active_view
   return (view and view:is(TerminalView)), view, amount
 end, {
   ["terminal:scroll"] = function(view, amount)
