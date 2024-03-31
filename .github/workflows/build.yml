@@ -34,7 +34,7 @@ jobs:
         uses: actions/checkout@v3
         with: { fetch-depth: 0, submodules: true }
       - name: Setup
-        run:  sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
+        run: sudo apt-get update && sudo apt-get install gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu
       - name: Build Linux
         run: |
           BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-linux'"'
