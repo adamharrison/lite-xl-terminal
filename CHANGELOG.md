@@ -1,3 +1,8 @@
+# 1.03
+
+* Added in an `aarch64` build.
+* Fixed terminal scrolling bug, where docview wouldn't scroll when the terminal had focus.
+
 # 1.02
 
 * Changed default color scheme to reflect that of the editor.
