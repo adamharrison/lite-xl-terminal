@@ -33,12 +33,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
         with: { fetch-depth: 0, submodules: true }
-      - name: Setup
-        run: sudo apt-get update && sudo apt-get install gcc-9-aarch64-linux-gnu binutils-aarch64-linux-gnu
       - name: Build Linux
         run: |
           BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-linux'"'
-          BIN=libterminal.aarch64-linux.so CC=aarch64-linux-gnu-gcc-9 ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-aarch64-linux'"'
+          BIN=libterminal.aarch64-linux.so CC=aarch64-linux-gnu-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-aarch64-linux'"'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with: { name: "Linux", path: "*.so" }
