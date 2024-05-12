@@ -84,7 +84,7 @@ jobs:
       with: { path: "." }
     - name: Perform Release
       env:
-        GITHUB_TOKEN: "${{ github.token }}",
+        GITHUB_TOKEN: "${{ github.token }}"
         DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}"
       run: |
         wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm-latest && chmod +x lpm-latest
