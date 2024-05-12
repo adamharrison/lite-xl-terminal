@@ -25,7 +25,7 @@
             },
             {
                "arch" : "x86_64-windows",
-               "checksum" : "e03198be5c7930331e30a6b70b62563eda1a0daed30c9f8ba69f69eebfeead9f",
+               "checksum" : "d78fe189cc058633a7d911f40d5e2c1ffac6cb8c609e54bd84c78b7acb4fa061",
                "url" : "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.03/libterminal.x86_64-windows.dll"
             }
          ],
