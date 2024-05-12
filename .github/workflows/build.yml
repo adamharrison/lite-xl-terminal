@@ -85,8 +85,8 @@ jobs:
     - name: Perform Release
       env:
         GITHUB_TOKEN: "${{ github.token }}"
-        DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}"
+        LPM_DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}"
       run: |
         wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm-latest && chmod +x lpm-latest
-        ./lpm-latest gh release Linux/*.so MacOS/*.so Windows/*.dll --discord='"'$DISCORD_WEBHOOK'"' --verbose
+        ./lpm-latest gh release Linux/*.so MacOS/*.so Windows/*.dll
 
