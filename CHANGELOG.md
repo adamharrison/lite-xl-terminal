@@ -1,3 +1,7 @@
+# 1.04
+
+* Fixed issue with checksums not being recomputed by fixing CI.
+
 # 1.03
 
 * Added in an `aarch64` build.
