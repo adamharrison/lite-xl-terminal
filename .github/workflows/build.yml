@@ -1,5 +1,7 @@
 name: CI
 on: { push: { branches: [master] } }
+env:
+  LPM_PLUGINS: https://raw.githubusercontent.com/adamharrison/lite-xl-maintenance/latest/lpm-plugins/gh.lua
 jobs:
   version:
     runs-on: ubuntu-latest
@@ -13,16 +15,8 @@ jobs:
         id: setup_release
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: |
-          export VERSION=`git describe --tags --match "v*" | tail -c +2`
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building terminal version $VERSION."
-          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*$ENV{VERSION}/' < CHANGELOG.md | tail -n +2 > NOTES.md
-          if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-            gh release delete -y v$VERSION || true; gh release create -t v$VERSION v$VERSION
-            gh release delete -y latest || true; gh release create -t latest latest
-          fi
-          gh release delete -y continuous || true; gh release create -p -t 'Continuous Release' continuous -F NOTES.md
-
+          wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm-latest && chmod +x lpm-latest
+          echo "version=`./lpm-latest gh version`" >> $GITHUB_OUTPUT
   build_linux:
     needs: [version]
     permissions: write-all
@@ -88,27 +82,11 @@ jobs:
     - name: Download Artifacts
       uses: actions/download-artifact@v3
       with: { path: "." }
-    - name: Finalize Tags
-      env: { GITHUB_TOKEN: "${{ github.token }}" }
+    - name: Perform Release
+      env:
+        GITHUB_TOKEN: "${{ github.token }}",
+        DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}"
       run: |
-        if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-          gh release upload v${{ needs.version.outputs.version }} Linux/*.so MacOS/*.so Windows/*.dll
-          gh release upload latest Linux/*.so MacOS/*.so Windows/*.dll
-          git branch -f latest HEAD
-          git tag -f latest
-          git push -f origin refs/heads/latest
-          git push -f origin refs/tags/latest
-        fi
-        gh release upload continuous Linux/*.so MacOS/*.so Windows/*.dll
-        git tag -f continuous
-        git push -f origin refs/tags/continuous
-    - name: Discord Webhook
-      env: { DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}" }
-      run: |
-        if [[ `git tag --points-at HEAD v* | head -c 1` == "v" ]]; then
-          perl -pe 'last if $_ =~ m/^\s*#/ && $_ !~ m/#\s*${{ needs.version.outputs.version }}/' < CHANGELOG.md | tail -n +2 > NOTES.md
-          perl -e 'use JSON qw(encode_json from_json); $/ = undef; print encode_json({ content => "## Lite XL Terminal v${{ needs.version.outputs.version }} has been released!\nhttps://github.com/adamharrison/lite-xl-terminal/releases/tag/v${{ needs.version.outputs.version }}\n\n### Changes in ${{ needs.version.outputs.version }}:\n" . <> })' < NOTES.md |
-            curl -H 'Content-Type:application/json' $DISCORD_WEBHOOK -X POST -d "$(</dev/stdin)"
-        fi
-
+        wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm-latest && chmod +x lpm-latest
+        ./lpm-latest gh release Linux/*.so MacOS/*.so Windows/*.dll --discord='"'$DISCORD_WEBHOOK'"'
 
