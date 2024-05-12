@@ -38,8 +38,8 @@ config.plugins.terminal = common.merge({
   delete = "\x1B[3~",
   -- the amount of lines you can emit before we start cutting them off
   scrollback_limit = 10000,
-  -- the default height of the console drawer
-  drawer_height = 300,
+  -- the pocket the drawer sits in
+  drawer_pocket = "bottom",
   -- the default console font. non-monsospace is unsupported
   font = style.code_font,
   -- padding around the edges of the terminal
@@ -198,6 +198,7 @@ function TerminalView:new(options)
   self.cursor = "ibeam"
   self.inversion_pressed = false
   self.scrollable = true
+  self.closable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
   self.modified_since_last_focus = false
@@ -360,7 +361,7 @@ function TerminalView:draw()
           end
           foreground = contrast_foreground[line[i]]
         end
-        
+
         local font = (((text_style >> 3) & 0x1) ~= 0) and self.options.bold_font or self.options.font
         local text = line[i+1]
         local length = text:ulen()
@@ -740,9 +741,7 @@ end, {
 command.add(nil, {
   ["terminal:toggle-drawer"] = function()
     if not core.terminal_view then
-      core.terminal_view = TerminalView(config.plugins.terminal)
-      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
-      core.set_active_view(core.terminal_view)
+      core.root_view:add_view(TerminalView(config.plugins.terminal), config.plugins.terminal.drawer_pocket)
     else
       core.terminal_view:close()
     end
@@ -758,7 +757,7 @@ command.add(nil, {
   end,
   ["terminal:open-tab"] = function()
     local tv = TerminalView(config.plugins.terminal)
-    core.root_view:get_active_node_default():add_view(tv)
+    core.root_view:add_view(tv)
   end
 })
 command.add(function() return core.terminal_view and core.active_view ~= core.terminal_view end, {
