@@ -1,3 +1,9 @@
+# 1.05
+
+* Fixed issues with fonts not scaling correctly, and scrollback not working when rescaling.
+* Allowed for input to be presented to the terminal before first `update`.
+* Allowed for fractional scrolling with high-precision trackpads.
+
 # 1.04
 
 * Fixed issue with checksums not being recomputed by fixing CI.

@@ -199,7 +199,6 @@ function TerminalView:new(options)
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
-  self.inversion_pressed = false
   self.modified_since_last_focus = false
 end
 
