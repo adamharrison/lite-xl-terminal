@@ -282,7 +282,9 @@ function TerminalView:update()
       self.v_scrollbar:set_percent(1.0 - (scrollback / total_scrollback))
       self.v_scrollbar:update()
     else
-      self:close()
+      core.add_thread(function()
+        self:close()
+      end)
     end
   end
   self.last_font_size = self.options.font:get_size()
