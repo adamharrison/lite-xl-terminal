@@ -248,6 +248,10 @@ function TerminalView:update()
     end
   end
   if self.terminal then
+    if self.deferred_input then
+      self:input(self.deferred_input)
+      self.deferred_input = nil
+    end
     local exited = self.terminal:exited()
     if exited == false then
       self.cursor = "ibeam"
@@ -577,6 +581,8 @@ function TerminalView:input(text)
     self:shift_selection_update()
     core.redraw = true
     return true
+  else
+    self.deferred_input = (self.deferred_input or "") .. text
   end
   return false
 end
