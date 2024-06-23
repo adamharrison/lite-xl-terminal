@@ -232,7 +232,10 @@ end
 
 
 function TerminalView:update()
-  if self.size.x > 0 and self.size.y > 0 and not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
+  if self.last_font_size and self.last_font_size ~= self.options.font:get_size() then
+    self.options.bold_font:set_size(self.options.font:get_size())
+  end
+  if (self.last_font_size and self.last_font_size ~= self.options.font:get_size()) or self.size.x > 0 and self.size.y > 0 and not self.terminal or self.last_size.x ~= self.size.x or self.last_size.y ~= self.size.y then
     self.columns = math.max(math.floor((self.size.x - self.options.padding.x*2) / self.options.font:get_width("W")), 1)
     self.lines = math.max(math.floor((self.size.y - self.options.padding.y*2) / self.options.font:get_height()), 1)
     if self.lines > 0 and self.columns > 0 then
@@ -282,7 +285,7 @@ function TerminalView:update()
       self:close()
     end
   end
-
+  self.last_font_size = self.options.font:get_size()
 end
 
 
