@@ -196,10 +196,10 @@ function TerminalView:new(options)
   self.size.y = options.drawer_height
   self.options = options
   self.cursor = "ibeam"
-  self.inversion_pressed = false
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
+  self.inversion_pressed = false
   self.modified_since_last_focus = false
 end
 
@@ -465,11 +465,12 @@ function TerminalView:on_mouse_pressed(button, x, y, clicks)
   end
   if button == "left" then
     local col, row = self:convert_coordinates(x, y)
-    if self.terminal:mouse_tracking_mode() == "x10" then
+    local inverted = config.plugins.terminal.inversion_key and keymap.modkeys[config.plugins.terminal.inversion_key]
+    if not inverted and self.terminal:mouse_tracking_mode() == "x10" then
       self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-    elseif self.terminal:mouse_tracking_mode() == "normal" then
+    elseif not inverted and self.terminal:mouse_tracking_mode() == "normal" then
       self.terminal:input("\x1B[M" .. string.char(32) .. string.char(32 + col + 1) .. string.char(32 + row + 1) )
-    elseif self.terminal:mouse_tracking_mode() == "sgr" then
+    elseif not inverted and self.terminal:mouse_tracking_mode() == "sgr" then
       self.terminal:input("\x1B[<0;" .. (col+1) .. ";" .. (row+1) .. "M" )
     else
       if clicks % 4 == 1 then
