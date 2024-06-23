@@ -649,7 +649,12 @@ end, {
         view.terminal:input("\x1B[<" .. (amount > 0 and 64 or 65) .. ";" .. (col+1) .. ";" .. (row+1) .. "M" )
       end
     else
-      view.terminal:scrollback(view.terminal:scrollback() + (amount or 1))
+      view.accumulated_scroll = (view.accumulated_scroll or 0) + (amount or 1)
+      if math.abs(view.accumulated_scroll) >= 1 then
+        local delta = math.floor(view.accumulated_scroll + 0.5)
+        view.terminal:scrollback(view.terminal:scrollback() + delta)
+        view.accumulated_scroll = view.accumulated_scroll - math.floor(view.accumulated_scroll + 0.5)
+      end
     end
   end
 })
