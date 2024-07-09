@@ -31,7 +31,8 @@
       ],
       "id": "terminal",
       "path": "plugins/terminal",
-      "version": "1.08"
+      "version": "1.08",
+      "mod_version": "4"
     }
   ]
 }
