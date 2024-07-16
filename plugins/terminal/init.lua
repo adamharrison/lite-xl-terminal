@@ -12,7 +12,7 @@ local terminal_native = require "plugins.terminal.libterminal"
 
 
 local default_shell =  os.getenv("SHELL") or (PLATFORM == "Windows" and os.getenv("COMSPEC")) or (PLATFORM == "Windows" and "c:\\windows\\system32\\cmd.exe" or "sh")
-config.plugins.terminal = common.merge({
+local default_config = {
   -- outputs a terminal.log file of all the output of your shell
   debug = false,
   -- the TERM to present as.
@@ -108,8 +108,84 @@ config.plugins.terminal = common.merge({
     [245] = { common.color "#8a8a8a" }, [246] = { common.color "#949494" }, [247] = { common.color "#9e9e9e" }, [248] = { common.color "#a8a8a8" }, [249] = { common.color "#b2b2b2" },
     [250] = { common.color "#bcbcbc" }, [251] = { common.color "#c6c6c6" }, [252] = { common.color "#d0d0d0" }, [253] = { common.color "#dadada" }, [254] = { common.color "#e4e4e4" },
     [255] = { common.color "#eeeeee" }
+  },
+}
+local function set_config_default_values(c) for _, v in ipairs(c) do if v.path then v.default = default_config[v.path] end end return c end
+-- configuration for the settings GUI (do not modify)
+default_config.config_spec = set_config_default_values {
+  name = "Terminal",
+  {
+    label = "Font",
+    description = "The font to use for the terminal.",
+    path = "font", type = "FONT"
+  },
+  {
+    label = "Background Color",
+    description = "The color of the terminal background (when not overridden by the shell).",
+    path = "background", type = "COLOR"
+  },
+  {
+    label = "Text Color",
+    description = "The color of the text (when not overridden by the shell).",
+    path = "text", type = "COLOR"
+  },
+  {
+    label = "Show Bold Text In Bright Colors",
+    description = "Display emboldened text with brighter colors.",
+    path = "bold_text_in_bright_colors", type = "TOGGLE"
+  },
+  {
+    label = "Minimum Contrast Ratio",
+    description = "Minimum contrast between the text and background color (set to 0 to disable auto color adjustment).",
+    path = "minimum_contrast_ratio", type = "NUMBER"
+  },
+  {
+    label = "Terminal Drawer Height",
+    description = "Height of the terminal drawer (in pixels).",
+    path = "drawer_height", type = "NUMBER"
+  },
+  {
+    label = "Inversion Key",
+    description = "The key to press in combination with CTRL to send the shortcut to Lite XL instead of the terminal.",
+    path = "inversion_key", type = "STRING",
+  },
+  {
+    label = "Omit Shortcuts",
+    description = "A Lua pattern of shortcuts to pass to Lite XL instead of the terminal.",
+    path = "omit_escapes", type = "STRING"
+  },
+  {
+    label = "Scrolling speed",
+    description = "The amount of time to scroll a line when selecting text offscreen.",
+    path = "scrolling_speed", type = "NUMBER"
+  },
+  {
+    label = "Shell",
+    description = "Absolute path to the shell for the terminal.",
+    path = "shell", type = "STRING"
+  },
+  {
+    label = "Shell Arguments",
+    description = "Extra arguments to pass to the shell.",
+    path = "arguments", type = "LIST_STRINGS"
+  },
+  {
+    label = "Terminal Type",
+    description = "The type to terminal to appear as (sets the $TERM environment variable).",
+    path = "term", type = "STRING"
+  },
+  {
+    label = "Scrollback Buffer Size",
+    description = "Number of lines to store for scrolling in the terminal.",
+    path = "scrollback_limit", type = "NUMBER"
+  },
+  {
+    label = "Change Other Options",
+    description = "For other options such as the color palette, you can change them in the user module.",
+    icon = "PLATFORM", type = "BUTTON", on_click = "core:open-user-module", path = "",
   }
-}, config.plugins.terminal)
+}
+config.plugins.terminal = common.merge(default_config, config.plugins.terminal)
 if not config.plugins.terminal.bold_font then config.plugins.terminal.bold_font = config.plugins.terminal.font:copy(style.code_font:get_size(), { smoothing = true }) end
 
 -- contrast functions pulled from https://github.com/xtermjs/xterm.js/blob/99df13b085aecb051f1373c5b7f8e819c4f41442/src/common/Color.ts#L285.
