@@ -269,6 +269,7 @@ function TerminalView:supports_text_input() return true end
 
 function TerminalView:new(options)
   TerminalView.super.new(self)
+  options = common.merge(common.merge({}, options or {}), config.plugins.terminal))
   self.size.y = options.drawer_height
   self.options = options
   self.cursor = "ibeam"
