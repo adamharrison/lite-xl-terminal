@@ -766,6 +766,13 @@ command.add(active_terminal_predicate, {
       view:input(system.get_clipboard())
     end
   end,
+  ["terminal:primary-paste"] = function(view)
+    if view.terminal:paste_mode() == "bracketed" then
+      view:input("\x1B[200~" .. system.get_primary_selection() .. "\x1B[201~")
+    else
+      view:input(system.get_primary_selection())
+    end
+  end,
   ["terminal:page-up"] = function(view) view:input("\x1B[5~") end,
   ["terminal:page-down"] = function(view) view:input("\x1B[6~") end,
   ["terminal:scroll-up"] = function(view) view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
@@ -897,6 +904,7 @@ local keys = {
   ["alt+backspace"] = "terminal:alt-backspace",
   ["ctrl+shift+c"] = "terminal:copy",
   ["ctrl+shift+v"] = "terminal:paste",
+  ["mclick"] = "terminal:primary-paste",
   ["wheel"] = "terminal:scroll",
   ["tab"] = "terminal:tab",
   ["pageup"] = "terminal:page-up",
