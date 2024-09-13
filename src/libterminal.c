@@ -8,7 +8,6 @@
   #include <windows.h>
   #include <wincon.h>
 #else
-  #include <pthread.h>
   #include <unistd.h>
   #include <fcntl.h>
   #include <sys/ioctl.h>
@@ -1536,7 +1535,7 @@ static const luaL_Reg terminal_api[] = {
   { "mouse_tracking_mode", f_terminal_mouse_tracking_mode    },
   { "cursor_keys_mode",    f_terminal_cursor_keys_mode       },
   { "keypad_keys_mode",    f_terminal_keypad_keys_mode       },
-  { "paste_mode",          f_terminal_paste_mode              },
+  { "paste_mode",          f_terminal_paste_mode             },
   { "scrollback",          f_terminal_scrollback             },
   { "name",                f_terminal_name                   },
   { NULL,                  NULL                              }
