@@ -170,6 +170,12 @@ typedef struct view_t {
   int scrolling_region_start, scrolling_region_end;
 } view_t;
 
+typedef enum mode_e {
+  // Acts as a normal terminal, with a pty, and a shell.
+  MODE_PTY,
+  // Acts as a dummy; text is pumped in manually from lua.
+  MODE_DUMMY
+} mode_e;
 
 typedef struct {
   int debug;                                         // If true, dumps output to working directory in a file called `terminal.log`.
@@ -184,6 +190,7 @@ typedef struct {
   view_e current_view;
   view_t views[VIEW_MAX];                            // Normally just two buffers, normal, and alternate.
   paste_mode_e paste_mode;
+  mode_e mode;                                       // The mode the terminal is in. 
   int reporting_focus;                               // Enables/disbles reporting focus.
   char name[LIBTERMINAL_NAME_MAX];                   // Window name, set with OS command.
   char buffered_sequence[LIBTERMINAL_CHUNK_SIZE];
@@ -281,12 +288,16 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
   return terminal->scrollback_position;
 }
 
+static int terminal_output(terminal_t* terminal, const char* str, int len);
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
-  #ifdef _WIN32
-    WriteFile(terminal->topty, str, len, NULL, NULL);
-  #else
-    write(terminal->master, str, len);
-  #endif
+  if (terminal->mode == MODE_PTY) {
+    #ifdef _WIN32
+      WriteFile(terminal->topty, str, len, NULL, NULL);
+    #else
+      write(terminal->master, str, len);
+    #endif
+  } else
+    terminal_output(terminal, str, len);
 }
 
 static void terminal_clear_scrollback_buffer(terminal_t* terminal) {
@@ -975,6 +986,8 @@ static int terminal_output(terminal_t* terminal, const char* str, int len) {
 #endif
 
 static int terminal_update(terminal_t* terminal, void (*callback)(char*, int, void*), void* data, int* total_shifts) {
+  if (terminal->mode == MODE_DUMMY)
+    return 0;
   char chunk[LIBTERMINAL_CHUNK_SIZE];
   int len, at_least_one = 0;
   #ifdef _WIN32
@@ -1013,48 +1026,50 @@ static int terminal_close(terminal_t* terminal) {
     terminal->views[i].buffer = NULL;
     terminal->views[i].overflows = NULL;
   }
-  #if _WIN32
-    // This has to be first, because if we don't drain the buffer in our nonblocking_thread,
-    // this call can hang. (SIGH).
-    terminal->closing = 1;
-    if (terminal->hpcon) {
-      ClosePseudoConsole(terminal->hpcon);
-      terminal->hpcon = NULL;
-    }
-    if (terminal->nonblocking_thread) {
-      TerminateThread(terminal->nonblocking_thread, 0);
-      terminal->nonblocking_thread = NULL;
-    }
-    if (terminal->topty) {
-      CloseHandle(terminal->topty);
-      terminal->topty = NULL;
-    }
-    if (terminal->frompty) {
-      CloseHandle(terminal->frompty);
-      terminal->frompty = NULL;
-    }
-    if (terminal->nonblocking_buffer_mutex) {
-      CloseHandle(terminal->nonblocking_buffer_mutex);
-      terminal->nonblocking_buffer_mutex = NULL;
-    }
-    if (terminal->process_information.hProcess) {
-      TerminateProcess(terminal->process_information.hProcess, 1);
-      terminal->process_information.hProcess = NULL;
-    }
-  #else
-    if (terminal->pid) {
-      if (terminal->master) {
-        close(terminal->master);
-        terminal->master = 0;
-        kill(terminal->pid, SIGHUP);
+  if (terminal->mode == MODE_PTY) {
+    #if _WIN32
+      // This has to be first, because if we don't drain the buffer in our nonblocking_thread,
+      // this call can hang. (SIGH).
+      terminal->closing = 1;
+      if (terminal->hpcon) {
+        ClosePseudoConsole(terminal->hpcon);
+        terminal->hpcon = NULL;
       }
-      int status;
-      if (waitpid(terminal->pid, &status, WNOHANG))
-        terminal->pid = 0;
-      else
-        return -1;
-    }
-  #endif
+      if (terminal->nonblocking_thread) {
+        TerminateThread(terminal->nonblocking_thread, 0);
+        terminal->nonblocking_thread = NULL;
+      }
+      if (terminal->topty) {
+        CloseHandle(terminal->topty);
+        terminal->topty = NULL;
+      }
+      if (terminal->frompty) {
+        CloseHandle(terminal->frompty);
+        terminal->frompty = NULL;
+      }
+      if (terminal->nonblocking_buffer_mutex) {
+        CloseHandle(terminal->nonblocking_buffer_mutex);
+        terminal->nonblocking_buffer_mutex = NULL;
+      }
+      if (terminal->process_information.hProcess) {
+        TerminateProcess(terminal->process_information.hProcess, 1);
+        terminal->process_information.hProcess = NULL;
+      }
+    #else
+      if (terminal->pid) {
+        if (terminal->master) {
+          close(terminal->master);
+          terminal->master = 0;
+          kill(terminal->pid, SIGHUP);
+        }
+        int status;
+        if (waitpid(terminal->pid, &status, WNOHANG))
+          terminal->pid = 0;
+        else
+          return -1;
+      }
+    #endif
+  }
   return 0;
 }
 
@@ -1071,13 +1086,15 @@ static void terminal_free(terminal_t* terminal) {
 static void terminal_resize(terminal_t* terminal, int columns, int lines) {
   if (terminal->columns == columns && terminal->lines == lines)
     return;
-  #ifdef _WIN32
-    COORD size = { columns, lines };
-    ResizePseudoConsole(terminal->hpcon, size);
-  #else
-    struct winsize size = { .ws_row = lines, .ws_col = columns, .ws_xpixel = 0, .ws_ypixel = 0 };
-    ioctl(terminal->master, TIOCSWINSZ, &size);
-  #endif
+  if (terminal->mode == MODE_PTY) {
+    #ifdef _WIN32
+      COORD size = { columns, lines };
+      ResizePseudoConsole(terminal->hpcon, size);
+    #else
+      struct winsize size = { .ws_row = lines, .ws_col = columns, .ws_xpixel = 0, .ws_ypixel = 0 };
+      ioctl(terminal->master, TIOCSWINSZ, &size);
+    #endif
+  }
   for (int i = 0; i < VIEW_MAX; ++i) {
     buffer_char_t* buffer = malloc(sizeof(buffer_char_t) * columns * lines);
     memset(buffer, 0, sizeof(buffer_char_t) * columns * lines);
@@ -1133,87 +1150,90 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
     terminal->views[i].tab_size = LIBTERMINAL_DEFAULT_TAB_SIZE;
   }
   terminal->scrollback_limit = scrollback_limit;
-  #ifdef _WIN32
-    last_error_code = 0;
-    HRESULT result = S_OK;
-    SECURITY_ATTRIBUTES no_sec = { .nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE, .lpSecurityDescriptor = NULL };
-    HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
-    COORD size = { columns, lines };
-    if ((!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0)) && set_error_step("create pipes"))
-      goto error;
-    result = CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
-    if (FAILED(result) && set_error_step("create pseudoconsole"))
-      goto error;
-    terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
-    if (!terminal->nonblocking_buffer_mutex && set_error_step("create mutex"))
-      goto error;
+  terminal->mode = pathname && strcmp(pathname, "DUMMY") != 0 ? MODE_PTY : MODE_DUMMY;
+  if (terminal->mode == MODE_PTY) {
+    #ifdef _WIN32
+      last_error_code = 0;
+      HRESULT result = S_OK;
+      SECURITY_ATTRIBUTES no_sec = { .nLength = sizeof(SECURITY_ATTRIBUTES), .bInheritHandle = TRUE, .lpSecurityDescriptor = NULL };
+      HANDLE out_pipe_pseudo_console_side, in_pipe_pseudo_console_side;
+      COORD size = { columns, lines };
+      if ((!CreatePipe(&in_pipe_pseudo_console_side, &terminal->topty, &no_sec, 0) || !CreatePipe(&terminal->frompty, &out_pipe_pseudo_console_side, &no_sec, 0)) && set_error_step("create pipes"))
+        goto error;
+      result = CreatePseudoConsole(size, in_pipe_pseudo_console_side, out_pipe_pseudo_console_side, 0, &terminal->hpcon);
+      if (FAILED(result) && set_error_step("create pseudoconsole"))
+        goto error;
+      terminal->nonblocking_buffer_mutex = CreateMutex(NULL, FALSE, NULL);
+      if (!terminal->nonblocking_buffer_mutex && set_error_step("create mutex"))
+        goto error;
 
-    HANDLE handles_to_inherit[] = { in_pipe_pseudo_console_side, out_pipe_pseudo_console_side };
-    STARTUPINFOEXW si_ex = {0};
-    si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
-    si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-    si_ex.StartupInfo.hStdInput = NULL;
-    si_ex.StartupInfo.hStdOutput = NULL;
-    si_ex.StartupInfo.hStdError = NULL;
-    size_t list_size;
-    // Create the appropriately sized thread attribute list
-    InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
-    si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
-    BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
-      UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
-      UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
-    if (!success && set_error_step("update proc attribute list")) {
+      HANDLE handles_to_inherit[] = { in_pipe_pseudo_console_side, out_pipe_pseudo_console_side };
+      STARTUPINFOEXW si_ex = {0};
+      si_ex.StartupInfo.cb = sizeof(STARTUPINFOEXW);
+      si_ex.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+      si_ex.StartupInfo.hStdInput = NULL;
+      si_ex.StartupInfo.hStdOutput = NULL;
+      si_ex.StartupInfo.hStdError = NULL;
+      size_t list_size;
+      // Create the appropriately sized thread attribute list
+      InitializeProcThreadAttributeList(NULL, 2, 0, &list_size);
+      si_ex.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)malloc(list_size);
+      BOOL success = InitializeProcThreadAttributeList(si_ex.lpAttributeList, 2, 0, (PSIZE_T)&list_size) &&
+        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, terminal->hpcon, sizeof(HPCON), NULL, NULL);
+        UpdateProcThreadAttribute(si_ex.lpAttributeList, 0, PROC_THREAD_ATTRIBUTE_HANDLE_LIST, handles_to_inherit, sizeof(handles_to_inherit), NULL, NULL);
+      if (!success && set_error_step("update proc attribute list")) {
+        DeleteProcThreadAttributeList(si_ex.lpAttributeList);
+        free(si_ex.lpAttributeList);
+        goto error;
+      }
+
+      int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
+      wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
+      len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
+      success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
       DeleteProcThreadAttributeList(si_ex.lpAttributeList);
       free(si_ex.lpAttributeList);
-      goto error;
-    }
-
-    int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
-    wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
-    len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-    success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
-    DeleteProcThreadAttributeList(si_ex.lpAttributeList);
-    free(si_ex.lpAttributeList);
-    free(commandline);
-    if (!success && set_error_step("create process"))
-      goto error;
-    terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
-    if (!terminal->nonblocking_thread && set_error_step("create thread"))
-      goto error;
-    error:
-    if (!terminal->nonblocking_thread) {
-      last_error_code = FAILED(result) ? HRESULT_CODE(result) : GetLastError();
-      terminal_close(terminal);
-      free(terminal);
-      return NULL;
-    }
-  #else
-    struct termios term = {0};
-    term.c_cc[VINTR] = 3;
-    term.c_cc[VSTART] = '\x13';
-    term.c_cc[VSTOP] = '\x11';
-    term.c_cc[VSUSP] = 26;
-    term.c_cc[VERASE] = '\x7F';
-    term.c_cc[VEOL] = 0;
-    term.c_cc[VEOF] = 4;
-    term.c_lflag |= ISIG | ECHO | ICANON | IEXTEN | ECHOE | ECHOK | ECHOCTL | ECHOKE;
-    term.c_cflag |= CS8 | CREAD;
-    term.c_iflag |= IUTF8 | ICRNL | IXON;
-    term.c_oflag |= OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
-    terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
-    if (terminal->pid == -1 && set_error_step("forkpty")) {
-      free(terminal);
-      return NULL;
-    }
-    if (!terminal->pid) {
-      setenv("TERM", term_env, 1);
-      execvp(pathname,  (char** const)argv);
-      exit(-1);
-      return NULL;
-    }
-    int flags = fcntl(terminal->master, F_GETFD, 0);
-    fcntl(terminal->master, F_SETFL, flags | O_NONBLOCK);
-  #endif
+      free(commandline);
+      if (!success && set_error_step("create process"))
+        goto error;
+      terminal->nonblocking_thread = CreateThread(NULL, 0, windows_nonblocking_thread_callback, terminal, 0, NULL);
+      if (!terminal->nonblocking_thread && set_error_step("create thread"))
+        goto error;
+      error:
+      if (!terminal->nonblocking_thread) {
+        last_error_code = FAILED(result) ? HRESULT_CODE(result) : GetLastError();
+        terminal_close(terminal);
+        free(terminal);
+        return NULL;
+      }
+    #else
+      struct termios term = {0};
+      term.c_cc[VINTR] = 3;
+      term.c_cc[VSTART] = '\x13';
+      term.c_cc[VSTOP] = '\x11';
+      term.c_cc[VSUSP] = 26;
+      term.c_cc[VERASE] = '\x7F';
+      term.c_cc[VEOL] = 0;
+      term.c_cc[VEOF] = 4;
+      term.c_lflag |= ISIG | ECHO | ICANON | IEXTEN | ECHOE | ECHOK | ECHOCTL | ECHOKE;
+      term.c_cflag |= CS8 | CREAD;
+      term.c_iflag |= IUTF8 | ICRNL | IXON;
+      term.c_oflag |= OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0;
+      terminal->pid = forkpty(&terminal->master, NULL, &term, NULL);
+      if (terminal->pid == -1 && set_error_step("forkpty")) {
+        free(terminal);
+        return NULL;
+      }
+      if (!terminal->pid) {
+        setenv("TERM", term_env, 1);
+        execvp(pathname,  (char** const)argv);
+        exit(-1);
+        return NULL;
+      }
+      int flags = fcntl(terminal->master, F_GETFD, 0);
+      fcntl(terminal->master, F_SETFL, flags | O_NONBLOCK);
+    #endif
+  }
   terminal_resize(terminal, columns, lines);
   return terminal;
 }
