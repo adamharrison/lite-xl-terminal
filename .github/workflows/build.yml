@@ -22,15 +22,17 @@ jobs:
     permissions: write-all
     runs-on: ubuntu-latest
     defaults: { run: { shell: bash } }
-    container: ghcr.io/lite-xl/lite-xl-build-box:latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
         with: { fetch-depth: 0, submodules: true }
       - name: Build Linux
-        run: |
-          BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-linux'"'
-          BIN=libterminal.aarch64-linux.so CC=aarch64-linux-gnu-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-aarch64-linux'"'
+        uses: docker://ghcr.io/lite-xl/lite-xl-build-box-manylinux:v3.0.2
+        with: 
+          entrypoint: /entrypoint.sh
+          args: |
+            BIN=libterminal.x86_64-linux.so ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-linux'"'
+            BIN=libterminal.aarch64-linux.so CC=aarch64-linux-gnu-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-aarch64-linux'"'
       - name: Upload Artifacts
         uses: actions/upload-artifact@v3
         with: { name: "Linux", path: "*.so" }
@@ -53,7 +55,7 @@ jobs:
 
   build_macos:
     needs: [version]
-    runs-on: macos-11
+    runs-on: macos-latest
     env:
       CC: clang
     steps:
