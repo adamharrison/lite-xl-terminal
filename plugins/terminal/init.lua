@@ -856,12 +856,15 @@ command.add(nil, {
     core.set_active_view(core.active_view == core.terminal_view and core.last_active_view or core.terminal_view)
   end,
   ["terminal:execute"] = function(text)
-    if not core.terminal_view then command.perform("terminal:toggle-drawer") end
-    local target_view = core.active_view:is(TerminalView) and core.active_view or core.terminal_view
+    local open_drawer = function(text)
+      if not core.terminal_view then command.perform("terminal:toggle-drawer") end
+      local target_view = core.active_view:is(TerminalView) and core.active_view or core.terminal_view
+      target_view:input(text .. target_view.options.newline) 
+    end
     if not text then
-      core.command_view:enter("Execute Command", { submit = function(text) target_view:input(text .. target_view.options.newline) end })
+      core.command_view:enter("Execute Command", { submit = open_drawer })
     else
-      target_view:input(text .. target_view.options.newline)
+      open_drawer(text)
     end
   end,
   ["terminal:open-tab"] = function()
