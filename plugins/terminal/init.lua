@@ -837,6 +837,7 @@ end, {
   end
 })
 
+
 command.add(nil, {
   ["terminal:toggle-drawer"] = function()
     if not core.terminal_view then
@@ -846,6 +847,13 @@ command.add(nil, {
     else
       core.terminal_view:close()
     end
+  end,
+  ["terminal:swap-drawer"] = function()
+    if not core.terminal_view then
+      core.terminal_view = TerminalView(config.plugins.terminal)
+      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
+    end
+    core.set_active_view(core.active_view == core.terminal_view and core.last_active_view or core.terminal_view)
   end,
   ["terminal:execute"] = function(text)
     if not core.terminal_view then command.perform("terminal:toggle-drawer") end
@@ -887,7 +895,8 @@ core.status_view:add_item({
 -- add in the terminal metacommands not related to actually sending things to the temrinal first
 keymap.add({
   ["ctrl+shift+`"] = "terminal:open-tab",
-  ["alt+t"]  = "terminal:toggle-drawer"
+  ["alt+t"]  = "terminal:swap-drawer",
+  ["shift+alt+t"]  = "terminal:toggle-drawer"
 })
 local keys = {
   ["return"] = "terminal:return",
