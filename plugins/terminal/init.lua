@@ -837,7 +837,6 @@ end, {
   end
 })
 
-
 command.add(nil, {
   ["terminal:toggle-drawer"] = function()
     if not core.terminal_view then
