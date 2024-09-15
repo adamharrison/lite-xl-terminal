@@ -1543,10 +1543,8 @@ static const luaL_Reg terminal_api[] = {
 
 
 #ifndef LIBTERMINAL_VERSION
-  #define LIBTERMINAL_VERSION unknown
+  #define LIBTERMINAL_VERSION "unknown"
 #endif
-// We do this because I can't seem to figure out a way to pass strings into the buildbox.
-#define lua_pushmacro(L, m) lua_pushliteral(L, #m)
 
 #ifndef LIBTERMINAL_STANDALONE
 int luaopen_lite_xl_libterminal(lua_State* L, void* XL) {
@@ -1556,7 +1554,7 @@ int luaopen_libterminal(lua_State* L) {
 #endif
   luaL_newmetatable(L, "libterminal");
   luaL_setfuncs(L, terminal_api, 0);
-  lua_pushmacro(L, LIBTERMINAL_VERSION);
+  lua_pushliteral(L, LIBTERMINAL_VERSION);
   lua_setfield(L, -2, "version");
   lua_pushvalue(L, -1);
   lua_setfield(L, -2, "__index");

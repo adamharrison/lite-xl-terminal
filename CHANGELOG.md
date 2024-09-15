@@ -1,3 +1,11 @@
+# 1.06
+
+* Added in ability for terminal to act as a dummy terminal, and simply read escape codes without any underlying shell process. Designed for use in the debugger plugin.
+* Added in a new command `terminal:swap-drawer`, which will spawn the terminal drawer if not open then swap to the terminal. If the terminal is selected, it will revert the focus to the previous active view. This has been bound to `alt+t`.
+* Rebound `terminal:toggle-drawer` to `shift+alt+t`.
+* Added in ability to perform a primary paste with middle click on latest lite-xl master.
+* Added in config_spec for the settings plugin to latch on to.
+
 # 1.05
 
 * Fixed issues with fonts not scaling correctly, and scrollback not working when rescaling.
