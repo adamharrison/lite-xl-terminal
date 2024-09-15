@@ -5,33 +5,33 @@
       "files": [
         {
           "arch": "x86_64-linux",
-          "checksum": "33af87cb5d4340b75b642097909da1f3b88204a97a48b1dc8ba54ced22bf6321",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.05/libterminal.x86_64-linux.so"
+          "checksum": "2d5a28f64299d930c5d77afeb92a44f8923e0ae1091e35ffa1b8c5338261a32f",
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-linux.so"
         },
         {
           "arch": "aarch64-linux",
-          "checksum": "05985e8aa137d19f8f4ccdccb01f843b251df377c8f697bc898424c6e0584e85",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.05/libterminal.aarch64-linux.so"
+          "checksum": "27e9af46c4f675327d3f2782beeade26bce2dccdf156416cd430ea9884683847",
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-linux.so"
         },
         {
           "arch": "x86_64-darwin",
-          "checksum": "3160c2a24d6bde066c557da5ea5be9267b996efebd924d3c7d5277aa1a2da6ce",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.05/libterminal.x86_64-darwin.so"
+          "checksum": "408e24b2d5d66e64f093cff329840b05616e3f118d6fe4bc3f6a492ba5cd4715",
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-darwin.so"
         },
         {
           "arch": "aarch64-darwin",
-          "checksum": "6949176b733dce8b1ac52dfed47b86d16f91943d56d0152e0b4a2b1953843507",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.05/libterminal.aarch64-darwin.so"
+          "checksum": "fc2b9addf5d39feb94c7d981e84eb5c5a871c46aa961b47fd6c52d7afa5078d3",
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-darwin.so"
         },
         {
           "arch": "x86_64-windows",
-          "checksum": "d86072adad18759752973501d4cf25ef7965fcfaa24274cbba57e149e67d1656",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.05/libterminal.x86_64-windows.dll"
+          "checksum": "cbcc0687199f3bed113d6d416545b6cbe9b2a8f4541e81b7f6d0c11bd56b20cb",
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-windows.dll"
         }
       ],
       "id": "terminal",
       "path": "plugins/terminal",
-      "version": "1.05"
+      "version": "1.06"
     }
   ]
 }
