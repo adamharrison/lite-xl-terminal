@@ -1507,6 +1507,7 @@ static int f_terminal_clear(lua_State* L) {
   memset(view->buffer, 0, sizeof(buffer_char_t) * (terminal->columns * terminal->lines));
   view->cursor_x = 0;
   view->cursor_y = 0;
+  return 0;
 }
 
 static int f_terminal_mouse_tracking_mode(lua_State* L) {
