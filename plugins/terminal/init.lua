@@ -277,16 +277,39 @@ function TerminalView:new(options)
   self.last_size = { x = self.size.x, y = self.size.y }
   self.focused = false
   self.modified_since_last_focus = false
+  self.links = { }
+end
+
+function TerminalView:unknown_escape_sequence(escape_type, chunk, x, y) 
+  if escape_type == "OS" then
+    local s,e, params, url = chunk:find("\x1B]8;([^;]*);(%C+)")
+    local x,y = self.terminal:cursor()
+    if url then
+      self.open_link = { url = chunk, x1 = x, y1 = y }
+    elseif chunk:find("\x1B]8;([^;]*);") then
+      self.open_link.x2, self.open_link.y2 = x, y
+      table.insert(self.links, self.open_link)
+      self.open_link = nil
+    end
+  end
 end
 
 function TerminalView:shift_selection_update()
-  local shifts = self.terminal:update()
+  local shifts = self.terminal:update(function(...) self:unknown_escape_sequence(...) end)
   if shifts and not self.focused then self.modified_since_last_focus = true end
   if self.selection and shifts then
     self.selection[2] = self.selection[2] - shifts
     self.selection[4] = self.selection[4] - shifts
     if math.abs(math.min(self.selection[2], self.selection[4])) > self.options.scrollback_limit then
       self.selection = nil
+    end
+    local i = 1
+    while i < #self.links do
+      if math.abs(math.min(link.y1, link.y2)) > self.options.scrollback_limit then
+        table.remove(self.links, i)
+      else
+        i = i + 1
+      end
     end
   end
   return shifts
@@ -504,7 +527,21 @@ function TerminalView:draw()
       end
       y = y + lh
     end
+    
+    local w, h = self.terminal:size()
+    for y = 1, h do
+      for i, link in ipairs(self.links) do
+        if link.y2 >= y and link.y1 <= y then
+          local start = self.position.x + self.options.padding.x
+          local finish = start + w * space_width
+          if link.y1 == y then start = start + link.x1 * space_width end
+          if link.y2 == y then finish = start + link.x2 * space_width end
+          renderer.draw_rect(start, self.position.y + lh * (y + 1), finish - start, 1, style.text)
+        end
+      end
+    end
   end
+
   TerminalView.super.draw_scrollbar(self)
 end
 
