@@ -298,7 +298,7 @@ static int terminal_scrollback(terminal_t* terminal, int target) {
   return terminal->scrollback_position;
 }
 
-static int terminal_output(terminal_t* terminal, const char* str, int len, void (*unhandled_escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, void*), void* data);
+static int terminal_output(terminal_t* terminal, const char* str, int len, void (*escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, int, void*), void* data);
 static void terminal_input(terminal_t* terminal, const char* str, int len) {
   if (terminal->mode == MODE_PTY) {
     #ifdef _WIN32
@@ -403,6 +403,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
   #endif
   view_t* view = &terminal->views[terminal->current_view];
   int unhandled = 0;
+  int total_shifts = 0;
   int end = (view->scrolling_region_end == -1 ? terminal->lines : view->scrolling_region_end);
   if (type == ESCAPE_TYPE_CSI) {
     int seq_end = strlen(seq) - 1;
@@ -442,6 +443,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
           break;
           case '3':
             terminal_clear_scrollback_buffer(terminal);
+            total_shifts += terminal->lines;
             // intentional fallthrough
           case '2':
             memset(view->buffer, 0, sizeof(buffer_char_t) * (terminal->columns * terminal->lines));
@@ -744,7 +746,7 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
     #endif
     return -1;
   }
-  return 0;
+  return total_shifts;
 }
 
 
@@ -832,7 +834,7 @@ static int translate_charset(charset_e charset, int codepoint) {
   return codepoint;
 }
 
-static int terminal_output(terminal_t* terminal, const char* str, int len, void (*unhandled_escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, void*), void* data) {
+static int terminal_output(terminal_t* terminal, const char* str, int len, void (*escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, int, void*), void* data) {
   if (terminal->debug)  {
     FILE* file = fopen("terminal.log", "ab");
     if (file) {
@@ -858,8 +860,11 @@ static int terminal_output(terminal_t* terminal, const char* str, int len, void 
         (escape_type == ESCAPE_TYPE_FIXED_WIDTH && buffered_sequence_index == fixed_width || str[offset] == 0x1B)
       ) {
         terminal->buffered_sequence[buffered_sequence_index++] = 0;
-        if (terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence) && unhandled_escape_callback)
-          unhandled_escape_callback(terminal, escape_type, terminal->buffered_sequence, buffered_sequence_index, data);
+        int shifts = terminal_escape_sequence(terminal, escape_type, terminal->buffered_sequence);
+        if (escape_callback)
+          escape_callback(terminal, escape_type, terminal->buffered_sequence, buffered_sequence_index, shifts, data);
+        if (shifts > 0)
+          total_shifts += shifts;
         view->last_graphical_character = 0;
         view = &terminal->views[terminal->current_view];
         buffered_sequence_index = 0;
@@ -987,7 +992,7 @@ static int terminal_output(terminal_t* terminal, const char* str, int len, void 
   }
 #endif
 
-static int terminal_update(terminal_t* terminal, void (*unhandled_escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, void*), void* data, int* total_shifts) {
+static int terminal_update(terminal_t* terminal, void (*escape_callback)(terminal_t*, terminal_escape_type_e, char*, int, int, void*), void* data, int* total_shifts) {
   if (terminal->mode == MODE_DUMMY)
     return 0;
   char chunk[LIBTERMINAL_CHUNK_SIZE];
@@ -995,7 +1000,7 @@ static int terminal_update(terminal_t* terminal, void (*unhandled_escape_callbac
   #ifdef _WIN32
     WaitForSingleObject(terminal->nonblocking_buffer_mutex, INFINITE);
     if (terminal->nonblocking_buffer_length > 0) {
-      *total_shifts += terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length, unhandled_escape_callback, data);
+      *total_shifts += terminal_output(terminal, terminal->nonblocking_buffer, terminal->nonblocking_buffer_length, escape_callback, data);
       at_least_one = 1;
     }
     terminal->nonblocking_buffer_length = 0;
@@ -1007,7 +1012,7 @@ static int terminal_update(terminal_t* terminal, void (*unhandled_escape_callbac
       len = read(terminal->master, chunk, sizeof(chunk));
       if (len == -1 && (errno == EAGAIN || errno == EWOULDBLOCK))
         return at_least_one;
-      *total_shifts += terminal_output(terminal, chunk, len, unhandled_escape_callback, data);
+      *total_shifts += terminal_output(terminal, chunk, len, escape_callback, data);
       at_least_one = 1;
     } while (len > 0 && chunks_processed++ < LIBTERMINAL_MAX_CHUNKS_PROCESSED);
   #endif
@@ -1376,7 +1381,7 @@ static int f_terminal_close(lua_State* L) {
   return 1;
 }
 
-static void chunk_update(terminal_t* terminal, terminal_escape_type_e escape_sequence, char* buf, int len, void* L) {
+static void chunk_update(terminal_t* terminal, terminal_escape_type_e escape_sequence, char* buf, int len, int shifts, void* L) {
   lua_pushvalue(L, 2);
   switch (escape_sequence) {
     case ESCAPE_TYPE_NONE: lua_pushnil(L); break;
@@ -1384,7 +1389,8 @@ static void chunk_update(terminal_t* terminal, terminal_escape_type_e escape_seq
     case ESCAPE_TYPE_CSI: lua_pushliteral(L, "CSI"); break;
   }
   lua_pushlstring(L, buf, len);
-  lua_call(L, 2, 1);
+  lua_pushboolean(L, shifts >= 0);
+  lua_call(L, 3, 1);
   if (!lua_isnil(L, -1)) {
     size_t len;
     const char* str = lua_tolstring(L, -1, &len);

@@ -280,22 +280,24 @@ function TerminalView:new(options)
   self.links = { }
 end
 
-function TerminalView:unknown_escape_sequence(escape_type, chunk, x, y) 
-  if escape_type == "OS" then
-    local s,e, params, url = chunk:find("\x1B]8;([^;]*);(%C+)")
-    local x,y = self.terminal:cursor()
-    if url then
-      self.open_link = { url = chunk, x1 = x, y1 = y }
-    elseif chunk:find("\x1B]8;([^;]*);") then
-      self.open_link.x2, self.open_link.y2 = x, y
-      table.insert(self.links, self.open_link)
-      self.open_link = nil
+function TerminalView:escape_sequence(escape_type, chunk, handled) 
+  if not handled then
+    if escape_type == "OS" then
+      local s,e, params, url = chunk:find("\x1B]8;([^;]*);(%C+)")
+      local x,y = self.terminal:cursor()
+      if url then
+        self.open_link = { url = chunk, x1 = x, y1 = y }
+      elseif chunk:find("\x1B]8;([^;]*);") then
+        self.open_link.x2, self.open_link.y2 = x, y
+        table.insert(self.links, self.open_link)
+        self.open_link = nil
+      end
     end
   end
 end
 
 function TerminalView:shift_selection_update()
-  local shifts = self.terminal:update(function(...) self:unknown_escape_sequence(...) end)
+  local shifts = self.terminal:update(function(...) self:escape_sequence(...) end)
   if shifts and not self.focused then self.modified_since_last_focus = true end
   if self.selection and shifts then
     self.selection[2] = self.selection[2] - shifts
