@@ -837,21 +837,28 @@ end, {
   end
 })
 
+local function toggle_drawer(open)
+  if not core.terminal_view_node then
+    core.terminal_view = TerminalView(config.plugins.terminal)
+    core.terminal_view_node = core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
+    core.terminal_view_closed = core.terminal_view.size.y
+  end 
+  if core.terminal_view_closed then
+    core.terminal_view_node:resize("y", core.terminal_view_closed)
+    core.terminal_view_closed = nil
+  else
+    core.terminal_view_closed = core.terminal_view.size.y
+    core.terminal_view_node:resize("y", 0)
+  end
+end
+
 command.add(nil, {
   ["terminal:toggle-drawer"] = function()
-    if not core.terminal_view then
-      core.terminal_view = TerminalView(config.plugins.terminal)
-      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
-      core.set_active_view(core.terminal_view)
-    else
-      core.terminal_view:close()
-    end
+    toggle_drawer(not core.terminal_view_closed)
+    if not core.terminal_view_closed then core.set_active_view(core.terminal_view) end
   end,
   ["terminal:swap-drawer"] = function()
-    if not core.terminal_view then
-      core.terminal_view = TerminalView(config.plugins.terminal)
-      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
-    end
+    toggle_drawer(true)
     core.set_active_view(core.active_view == core.terminal_view and core.last_active_view or core.terminal_view)
   end,
   ["terminal:execute"] = function(text)
