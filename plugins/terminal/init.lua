@@ -24,7 +24,7 @@ local default_config = {
   omit_escapes = nil,
   -- the default shell to boot up in
   shell = default_shell,
-  -- the arguments to pass to your shell
+  -- the arguments to pass to your shell; does not work on windows.
   arguments = { },
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
@@ -166,7 +166,7 @@ default_config.config_spec = set_config_default_values {
   },
   {
     label = "Shell Arguments",
-    description = "Extra arguments to pass to the shell.",
+    description = "Extra arguments to pass to the shell; does not function on windows.",
     path = "arguments", type = "LIST_STRINGS"
   },
   {
