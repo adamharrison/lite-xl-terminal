@@ -115,11 +115,6 @@ local function set_config_default_values(c) for _, v in ipairs(c) do if v.path t
 default_config.config_spec = set_config_default_values {
   name = "Terminal",
   {
-    label = "Font",
-    description = "The font to use for the terminal.",
-    path = "font", type = "FONT"
-  },
-  {
     label = "Background Color",
     description = "The color of the terminal background (when not overridden by the shell).",
     path = "background", type = "COLOR"
