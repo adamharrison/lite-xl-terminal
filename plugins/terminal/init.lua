@@ -305,9 +305,13 @@ function TerminalView:shift_selection_update()
     if math.abs(math.min(self.selection[2], self.selection[4])) > self.options.scrollback_limit then
       self.selection = nil
     end
+  end
+  if shifts and shifts > 0 and #self.links > 0 then
     local i = 1
-    while i < #self.links do
-      if math.abs(math.min(link.y1, link.y2)) > self.options.scrollback_limit then
+    while i <= #self.links do
+      self.links[i].y1 = self.links[i].y1 - shifts
+      self.links[i].y2 = self.links[i].y2 - shifts
+      if math.abs(math.min(self.links[i].y1, self.links[i].y2)) > self.options.scrollback_limit then
         table.remove(self.links, i)
       else
         i = i + 1
