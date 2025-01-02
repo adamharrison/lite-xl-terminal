@@ -761,13 +761,6 @@ command.add(active_terminal_predicate, {
       view:input(system.get_clipboard())
     end
   end,
-  ["terminal:primary-paste"] = function(view)
-    if view.terminal:paste_mode() == "bracketed" then
-      view:input("\x1B[200~" .. system.get_primary_selection() .. "\x1B[201~")
-    else
-      view:input(system.get_primary_selection())
-    end
-  end,
   ["terminal:page-up"] = function(view) view:input("\x1B[5~") end,
   ["terminal:page-down"] = function(view) view:input("\x1B[6~") end,
   ["terminal:scroll-up"] = function(view) view.terminal:scrollback(view.terminal:scrollback() + view.lines) end,
@@ -822,6 +815,17 @@ command.add(active_terminal_predicate, {
   ["terminal:clear"] = function(view) view.terminal:clear() view:input(view.options.newline) end,
   ["terminal:close-tab"] = function(view) view:close() end
 });
+if system.get_primary_selection then -- check for master vs. 2.1.7
+  command.add(active_terminal_predicate, {
+    ["terminal:primary-paste"] = function(view)
+      if view.terminal:paste_mode() == "bracketed" then
+        view:input("\x1B[200~" .. system.get_primary_selection() .. "\x1B[201~")
+      else
+        view:input(system.get_primary_selection())
+      end
+    end
+  })
+end
 
 command.add(function()
   return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
