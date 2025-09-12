@@ -336,8 +336,8 @@ function TerminalView:update()
          or self.v_scrollbar.hovering.track then
         self.cursor = "arrow"
       end
-      if (core.active_view == self and not self.focused) or (core.active_view ~= self and self.focused) then
-        self.focused = core.active_view == self
+      if (self.root_view.active_view == self and not self.focused) or (self.root_view.active_view ~= self and self.focused) then
+        self.focused = self.root_view.active_view == self
         self.modified_since_last_focus = false
         self.terminal:focused(self.focused)
       end
@@ -423,7 +423,7 @@ function TerminalView:draw()
     for line_idx, line in ipairs(self.terminal:lines()) do
       local x = self.position.x + self.options.padding.x
       local should_draw_cursor = false
-      if mode ~= "hidden" and core.active_view == self and line_idx - 1 == cursor_y and self.terminal:scrollback() == 0 then
+      if mode ~= "hidden" and self.root_view.active_view == self and line_idx - 1 == cursor_y and self.terminal:scrollback() == 0 then
         if mode == "blinking" then
           local T = config.blink_period
           if (core.blink_timer - core.blink_start) % T < T / 2 then
@@ -670,9 +670,9 @@ end
 
 function TerminalView:close()
   if self.terminal then self.terminal:close() end
-  local node = core.root_view.root_node:get_node_for_view(self)
-  node:close_view(core.root_view.root_node, self)
-  if core.terminal_view == self then core.terminal_view = nil end
+  local node = self.root_view.root_node:get_node_for_view(self)
+  node:close_view(self.root_view.root_node, self)
+  if self.root_view.terminal_view == self then self.root_view.terminal_view = nil end
   self.terminal = nil
   self.routine = nil
 end
@@ -717,11 +717,11 @@ function TerminalView:get_text(line1, col1, line2, col2)
 end
 
 
-command.add(function(amount)
+command.add(function(root_view, amount)
   -- core.root_view.overlapping_view is not in any release yet (as of 2.1.3)
-  local view = core.root_view.overlapping_view
-                or (core.root_view.overlapping_node and core.root_view.overlapping_node.active_view)
-                or core.active_view
+  local view = root_view.overlapping_view
+                or (root_view.overlapping_node and root_view.overlapping_node.active_view)
+                or root_view.active_view
   return (view and view:is(TerminalView)), view, amount
 end, {
   ["terminal:scroll"] = function(view, amount)
@@ -744,8 +744,8 @@ end, {
 })
 
 
-local active_terminal_predicate = function(...)
-  return (core.active_view:is(TerminalView) and core.active_view.terminal), core.active_view, ...
+local active_terminal_predicate = function(root_view, ...)
+  return (root_view.active_view:is(TerminalView) and root_view.active_view.terminal), root_view.active_view, ...
 end
 command.add(active_terminal_predicate, {
   ["terminal:backspace"] = function(view) view:input(view.options.backspace) end,
@@ -828,52 +828,52 @@ command.add(active_terminal_predicate, {
   ["terminal:close-tab"] = function(view) view:close() end
 });
 
-command.add(function()
-  return core.active_view and core.active_view:is(TerminalView) and core.active_view.selection and #core.active_view.selection == 4
+command.add(function(root_view)
+  return root_view.active_view and root_view.active_view:is(TerminalView) and root_view.active_view.selection and #root_view.active_view.selection == 4
 end, {
-  ["terminal:copy"] = function()
-    local selection = core.active_view:sorted_selection()
-    system.set_clipboard(core.active_view:get_text(selection[2], selection[1], selection[4], selection[3]))
+  ["terminal:copy"] = function(root_view)
+    local selection = root_view.active_view:sorted_selection()
+    system.set_clipboard(root_view.active_view:get_text(selection[2], selection[1], selection[4], selection[3]))
   end
 })
 
 command.add(nil, {
-  ["terminal:toggle-drawer"] = function()
-    if not core.terminal_view then
-      core.terminal_view = TerminalView(config.plugins.terminal)
-      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
-      core.set_active_view(core.terminal_view)
+  ["terminal:toggle-drawer"] = function(root_view)
+    if not root_view.terminal_view then
+      root_view.terminal_view = TerminalView(config.plugins.terminal)
+      root_view:get_active_node_default():split("down", root_view.terminal_view, { y = true }, true)
+      root_view:set_active_view(root_view.terminal_view)
     else
-      core.terminal_view:close()
+      root_view.terminal_view:close()
     end
   end,
-  ["terminal:swap-drawer"] = function()
-    if not core.terminal_view then
-      core.terminal_view = TerminalView(config.plugins.terminal)
-      core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
+  ["terminal:swap-drawer"] = function(root_view)
+    if not root_view.terminal_view then
+      root_view.terminal_view = TerminalView(config.plugins.terminal)
+      root_view:get_active_node_default():split("down", root_view.terminal_view, { y = true }, true)
     end
-    core.set_active_view(core.active_view == core.terminal_view and core.last_active_view or core.terminal_view)
+    root_view:set_active_view(root_view.active_view == root_view.terminal_view and root_view.last_active_view or root_view.terminal_view)
   end,
-  ["terminal:execute"] = function(text)
+  ["terminal:execute"] = function(root_view, text)
     local open_drawer = function(text)
-      if not core.terminal_view then command.perform("terminal:toggle-drawer") end
-      local target_view = core.active_view:is(TerminalView) and core.active_view or core.terminal_view
+      if not root_view.terminal_view then command.perform("terminal:toggle-drawer", root_view) end
+      local target_view = root_view.active_view:is(TerminalView) and root_view.active_view or root_view.terminal_view
       target_view:input(text .. target_view.options.newline) 
     end
     if not text then
-      core.command_view:enter("Execute Command", { submit = open_drawer })
+      root_view.command_view:enter("Execute Command", { submit = open_drawer })
     else
       open_drawer(text)
     end
   end,
-  ["terminal:open-tab"] = function()
+  ["terminal:open-tab"] = function(root_view)
     local tv = TerminalView(config.plugins.terminal)
-    core.root_view:get_active_node_default():add_view(tv)
+    root_view:get_active_node_default():add_view(tv)
   end
 })
 command.add(function() return core.terminal_view and core.active_view ~= core.terminal_view end, {
-  ["terminal:focus"] = function()
-    core.set_active_view(core.terminal_view)
+  ["terminal:focus"] = function(root_view)
+    root_view:set_active_view(root_view.terminal_view)
   end
 })
 
@@ -991,7 +991,7 @@ if config.plugins.terminal.inversion_key then
     for i,v in ipairs(keymap.map["ctrl+" .. string.char(i)] or {}) do
       if not v:find("terminal") then
         table.insert(keymaps, "terminal:" .. v)
-        commands["terminal:" .. v] = function(...) command.perform(v, ...) end
+        commands["terminal:" .. v] = function(terminal_view, ...) command.perform(v, terminal_view.root_view, ...) end
       end
     end
     if #keymaps > 0 and not keymap.map["ctrl+" .. config.plugins.terminal.inversion_key .. "+" .. string.char(i)] then
