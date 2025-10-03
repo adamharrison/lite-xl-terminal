@@ -71,6 +71,7 @@ jobs:
   finalize:
     needs: [version, build_macos, build_linux, build_windows]
     runs-on: ubuntu-latest
+    permissions: workflows
     environment: Release
     steps:
     - name: Checkout Code
