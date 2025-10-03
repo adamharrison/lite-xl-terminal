@@ -71,7 +71,6 @@ jobs:
   finalize:
     needs: [version, build_macos, build_linux, build_windows]
     runs-on: ubuntu-latest
-    permissions: workflows
     environment: Release
     steps:
     - name: Checkout Code
@@ -86,5 +85,6 @@ jobs:
         LPM_DISCORD_WEBHOOK: "${{ secrets.DISCORD_WEBHOOK }}"
       run: |
         wget https://github.com/lite-xl/lite-xl-plugin-manager/releases/download/latest/lpm.x86_64-linux -O lpm-latest && chmod +x lpm-latest
+        git status
         ./lpm-latest gh release Linux/*.so MacOS/*.lib Windows/*.dll
 
