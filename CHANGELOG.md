@@ -1,3 +1,7 @@
+# 1.08
+
+* Ensured that `-lutil` is linked, to ensure greater compatibilty with older Ubuntu distributions.
+
 # 1.07
 
 * Fixed small bug relating to one of the ctrl sequences.
