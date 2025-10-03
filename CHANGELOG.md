@@ -1,3 +1,8 @@
+# 1.07
+
+* Fixed small bug relating to one of the ctrl sequences.
+* Updated mac releases to be .lib, and ensured that `macos-latest` uses the appropriate architecture when compiling a release.
+
 # 1.06
 
 * Added in ability for terminal to act as a dummy terminal, and simply read escape codes without any underlying shell process. Designed for use in the debugger plugin.
