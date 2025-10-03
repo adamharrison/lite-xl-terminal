@@ -5,27 +5,27 @@
       "files": [
         {
           "arch": "x86_64-linux",
-          "checksum": "6cbe67cba7bc98310adb78b79e21568caa246a76c457f00c8f47fb2696a6f0ef",
+          "checksum": "2d5a28f64299d930c5d77afeb92a44f8923e0ae1091e35ffa1b8c5338261a32f",
           "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-linux.so"
         },
         {
           "arch": "aarch64-linux",
-          "checksum": "befdd7e425b1f829ef1dc3db8e297d7849f0260dc91a6d2314702936db5e3f3d",
+          "checksum": "27e9af46c4f675327d3f2782beeade26bce2dccdf156416cd430ea9884683847",
           "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-linux.so"
         },
         {
           "arch": "x86_64-darwin",
-          "checksum": "b44c94122856034100e25854c65484f41b5b3d4d765dedfaa64d215c4846c6c7",
+          "checksum": "408e24b2d5d66e64f093cff329840b05616e3f118d6fe4bc3f6a492ba5cd4715",
           "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-darwin.lib"
         },
         {
           "arch": "aarch64-darwin",
-          "checksum": "c1a08a6f72601e82e41f3966902355e0046a9b2a6bfbac2cecafb724a6762b26",
+          "checksum": "fc2b9addf5d39feb94c7d981e84eb5c5a871c46aa961b47fd6c52d7afa5078d3",
           "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-darwin.lib"
         },
         {
           "arch": "x86_64-windows",
-          "checksum": "d50227bd403ec6f9d1b657399d1640587dd9c31cb1c0f685b19de29b9b7d2dc3",
+          "checksum": "cbcc0687199f3bed113d6d416545b6cbe9b2a8f4541e81b7f6d0c11bd56b20cb",
           "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-windows.dll"
         }
       ],
