@@ -16,12 +16,12 @@
         {
           "arch": "x86_64-darwin",
           "checksum": "408e24b2d5d66e64f093cff329840b05616e3f118d6fe4bc3f6a492ba5cd4715",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-darwin.so"
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.x86_64-darwin.lib"
         },
         {
           "arch": "aarch64-darwin",
           "checksum": "fc2b9addf5d39feb94c7d981e84eb5c5a871c46aa961b47fd6c52d7afa5078d3",
-          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-darwin.so"
+          "url": "https://github.com/adamharrison/lite-xl-terminal/releases/download/v1.06/libterminal.aarch64-darwin.lib"
         },
         {
           "arch": "x86_64-windows",
@@ -31,7 +31,7 @@
       ],
       "id": "terminal",
       "path": "plugins/terminal",
-      "version": "1.06"
+      "version": "1.07"
     }
   ]
 }
