@@ -29,7 +29,7 @@ jobs:
       - name: Build Linux
         run: docker run -v .:/terminal ubuntu:14.04 bash -c 'cd /terminal && apt-get update && apt-get install -y gcc-4.8 gcc-4.8-aarch64-linux-gnu && BIN=libterminal.aarch64-linux.so CC=aarch64-linux-gnu-gcc-4.8 ./build.sh -O3 -std=c99 -D_BSD_SOURCE -D_POSIX_SOURCE -DLIBTERMINAL_VERSION=\"${{ needs.version.outputs.version }}-aarch64-linux\" && CC=gcc-4.8 BIN=libterminal.x86_64-linux.so ./build.sh -std=c99 -D_BSD_SOURCE -D_POSIX_SOURCE -O3 -DLIBTERMINAL_VERSION=\"${{ needs.version.outputs.version }}-x86_64-linux\" '
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: "Linux", path: "*.so" }
 
   build_windows:
@@ -45,7 +45,7 @@ jobs:
         env: { GITHUB_TOKEN: "${{ github.token }}" }
         run: sudo apt-get install mingw-w64 && BIN=libterminal.x86_64-windows.dll CC=x86_64-w64-mingw32-gcc ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-windows'"'
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: "Windows", path: "*.dll" }
 
   build_macos:
@@ -64,7 +64,7 @@ jobs:
           BIN=libterminal.x86_64-darwin.lib CC=clang CFLAGS="-arch x86_64" ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-darwin'"'
           BIN=libterminal.aarch64-darwin.lib CC=clang CFLAGS="-arch arm64" ./build.sh -O3 -DLIBTERMINAL_VERSION='"'${{ needs.version.outputs.version }}-x86_64-darwin'"'
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with: { name: "MacOS", path: "*.lib" }
   
 
