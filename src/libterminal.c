@@ -1338,7 +1338,7 @@ static LPCWSTR lua_tolutf16(lua_State* L, const char* str, size_t utf8len) {
   if (len > 0) {
     LPWSTR output = (LPWSTR) malloc(sizeof(WCHAR) * len);
     if (output) {
-      len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
+      len = MultiByteToWideChar(CP_UTF8, 0, str, utf8len, output, len);
       if (len > 0) {
         lua_pushlstring(L, (char*)output, len * 2);
         free(output);

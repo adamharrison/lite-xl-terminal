@@ -24,7 +24,7 @@ local default_config = {
   -- lua pattern for escape sequences to ignore. nil to target all escapes to terminal. example value would be "ctrl%+[nwpf]"
   omit_escapes = nil,
   -- the default shell to boot up in
-  shell = default_shell,
+  shell = nil,
   -- the arguments to pass to your shell; does not work on windows.
   arguments = { },
   -- the environmental variable to set on shell instantiation
@@ -267,7 +267,7 @@ function TerminalView:supports_text_input() return true end
 
 function TerminalView:new(options)
   TerminalView.super.new(self)
-  options = common.merge(common.merge({}, config.plugins.terminal), options)
+  options = common.merge(common.merge({ shell = default_shell }, config.plugins.terminal), options)
   self.size.y = options.drawer_height
   self.options = options
   if PLATFORM == "Windows" then
@@ -299,7 +299,7 @@ end
 
 
 function TerminalView:spawn()
-  self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.environment, self.options.debug)
+  self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell or default_shell, self.options.arguments, self.options.environment, self.options.debug)
   -- We make this weak so that any other method of closing the view gets caught up in the garbage collection and the coroutine doesn't count as a reference for gc purposes.
   local weak_table = { self = self }
   setmetatable(weak_table, { __mode = "v" })
@@ -906,7 +906,7 @@ function RootView:new(...)
       local dv = self.active_view
       local x, y = dv.terminal:size()
       return {
-        style.text, style.font, (dv.terminal:name() or config.plugins.terminal.shell),
+        style.text, style.font, (dv.terminal:name() or dv.options.shell),
         style.dim, style.font, self.status_view.separator2,
         style.text, style.font, x .. "x" .. y
       }
