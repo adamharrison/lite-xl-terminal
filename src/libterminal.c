@@ -1395,9 +1395,13 @@ static int f_terminal_new(lua_State* L) {
   #if _WIN32
     size_t envlen;
     const char* env = luaL_checklstring(L, 7, &envlen);
-    lua_tolutf16(L, env, envlen);
-    environment[0] = strdup(lua_tostring(L, -1));
-    lua_pop(L, 1);
+    if (lua_tolutf16(L, env, envlen)) {
+      size_t utf16len;
+      const char* utf16 = lua_tolstring(L, -1, &utf16len);
+      environment[0] = malloc(utf16len);
+      memcpy(environment[0], utf16, utf16len);
+      lua_pop(L, 1);
+    }
   #else
     luaL_checktype(L, 7, LUA_TTABLE);
     lua_pushnil(L); 

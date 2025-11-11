@@ -274,7 +274,7 @@ function TerminalView:new(options)
     for k,v in pairs(common.merge(terminal_native.getenv(), options.environment)) do
       table.insert(t, k .. "=" .. v)
     end
-    self.options.environment = table.concat(t, "\0") .. "\0"
+    self.options.environment = table.concat(t, "\0") .. "\0\0"
   end
   self.cursor = "ibeam"
   self.scrollable = true
