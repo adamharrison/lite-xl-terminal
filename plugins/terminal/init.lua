@@ -26,6 +26,8 @@ local default_config = {
   shell = default_shell,
   -- the arguments to pass to your shell; does not work on windows.
   arguments = { },
+  -- the environmental variable to set on shell instantiation
+  environment = { },
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
   -- the newline character to use
@@ -267,6 +269,13 @@ function TerminalView:new(options)
   options = common.merge(common.merge({}, config.plugins.terminal), options)
   self.size.y = options.drawer_height
   self.options = options
+  if PLATFORM == "Windows" then
+    local t = {}
+    for k,v in pairs(common.merge(terminal_native.getenv(), options.environment)) do
+      table.insert(t, k .. "=" .. v)
+    end
+    self.options.environment = table.concat(t, "\0") .. "\0"
+  end
   self.cursor = "ibeam"
   self.scrollable = true
   self.last_size = { x = self.size.x, y = self.size.y }
@@ -289,7 +298,7 @@ end
 
 
 function TerminalView:spawn()
-  self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.debug)
+  self.terminal = terminal_native.new(self.columns, self.lines, self.options.scrollback_limit, self.options.term, self.options.shell, self.options.arguments, self.options.environment, self.options.debug)
   -- We make this weak so that any other method of closing the view gets caught up in the garbage collection and the coroutine doesn't count as a reference for gc purposes.
   local weak_table = { self = self }
   setmetatable(weak_table, { __mode = "v" })

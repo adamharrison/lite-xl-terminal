@@ -1138,7 +1138,7 @@ static int set_error_step(const char* step) { strncpy(error_step, step, sizeof(e
   static const char* terminal_get_last_error() { return error_step; }
 #endif
 
-static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* term_env, const char* pathname, const char** argv) {
+static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, const char* term_env, const char* pathname, const char** argv, const char** environment) {
   terminal_t* terminal = calloc(sizeof(terminal_t), 1);
   for (int i = 0; i < VIEW_MAX; ++i) {
     for (int j = 0; j < 256; ++j)
@@ -1189,7 +1189,7 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       int len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, NULL, 0);
       wchar_t* commandline = malloc(sizeof(wchar_t)*(len+1));
       len = MultiByteToWideChar(CP_UTF8, 0, pathname, -1, commandline, len);
-      success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT, NULL, NULL, &si_ex.StartupInfo, &terminal->process_information);
+      success = CreateProcessW(NULL, commandline, NULL, NULL, TRUE, EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, (void*)environment[0], NULL, &si_ex.StartupInfo, &terminal->process_information);
       DeleteProcThreadAttributeList(si_ex.lpAttributeList);
       free(si_ex.lpAttributeList);
       free(commandline);
@@ -1225,6 +1225,8 @@ static terminal_t* terminal_new(int columns, int lines, int scrollback_limit, co
       }
       if (!terminal->pid) {
         setenv("TERM", term_env, 1);
+        for (int i = 0; i < 256 && environment[i]; i += 2)
+          setenv(environment[i], environment[i+1], 1);
         execvp(pathname,  (char** const)argv);
         exit(-1);
         return NULL;
@@ -1328,6 +1330,43 @@ static int f_terminal_lines(lua_State* L) {
 }
 
 
+#if _WIN32
+static LPCWSTR lua_tolutf16(lua_State* L, const char* str, size_t utf8len) {
+  if (str && str[0] == 0)
+    return L"";
+  int len = MultiByteToWideChar(CP_UTF8, 0, str, utf8len, NULL, 0);
+  if (len > 0) {
+    LPWSTR output = (LPWSTR) malloc(sizeof(WCHAR) * len);
+    if (output) {
+      len = MultiByteToWideChar(CP_UTF8, 0, str, -1, output, len);
+      if (len > 0) {
+        lua_pushlstring(L, (char*)output, len * 2);
+        free(output);
+        return (LPCWSTR)lua_tostring(L, -1);
+      }
+      free(output);
+    }
+  }
+  return NULL;
+}
+
+static const char* lua_toutf8(lua_State* L, LPCWSTR str) {
+  int len = WideCharToMultiByte(CP_UTF8, 0, str, -1, NULL, 0, NULL, NULL);
+  if (len > 0) {
+    char* output = (char *) malloc(sizeof(char) * len);
+    if (output) {
+      len = WideCharToMultiByte(CP_UTF8, 0, str, -1, output, len, NULL, NULL);
+      if (len) {
+        lua_pushlstring(L, output, len - 1);
+        free(output);
+        return lua_tostring(L, -1);
+      }
+      free(output);
+    }
+  }
+  return NULL;
+}
+#endif
 
 static int f_terminal_new(lua_State* L) {
   int x = luaL_checkinteger(L, 1);
@@ -1335,7 +1374,8 @@ static int f_terminal_new(lua_State* L) {
   int scrollback_limit = luaL_checkinteger(L, 3);
   const char* term_env = luaL_checkstring(L, 4);
   const char* path = luaL_checkstring(L, 5);
-  char* arguments[256];
+  char* arguments[256] = {0};
+  char* environment[256] = {0};
   arguments[0] = (char*)path;
   arguments[1] = NULL;
   if (lua_type(L, 6) == LUA_TTABLE) {
@@ -1352,10 +1392,29 @@ static int f_terminal_new(lua_State* L) {
       }
     }
   }
+  #if _WIN32
+    size_t envlen;
+    const char* env = luaL_checklstring(L, 7, &envlen);
+    lua_tolutf16(L, env, envlen);
+    environment[0] = strdup(lua_tostring(L, -1));
+    lua_pop(L, 1);
+  #else
+    luaL_checktype(L, 7, LUA_TTABLE);
+    lua_pushnil(L); 
+    int i = 0;
+    while (lua_next(L, 7) != 0 && i < 255) {
+      environment[i] = strdup(lua_tostring(L, -2));
+      environment[i+1] = strdup(lua_tostring(L, -1));
+      i = i + 2;
+      lua_pop(L, 1);
+    }
+  #endif
   int debug = lua_toboolean(L, 7);
-  terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments);
+  terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments, (const char**)environment);
   for (int i = 1; i < 256 && arguments[i]; ++i)
     free(arguments[i]);
+  for (int i = 1; i < 256 && environment[i]; ++i)
+    free(environment[i]);
   if (!terminal)
     return luaL_error(L, "error creating terminal: %s", terminal_get_last_error());
   terminal->debug = debug;
@@ -1365,6 +1424,27 @@ static int f_terminal_new(lua_State* L) {
   luaL_setmetatable(L, "libterminal");
   return 1;
 }
+
+#if _WIN32
+static int f_terminal_getenv(lua_State* L) {
+  LPWCH system_env = GetEnvironmentStringsW(), envp = system_env;
+  lua_newtable(L);
+  int table = lua_gettop(L);
+  while (wcslen(envp) > 0) {
+    const char* str = lua_toutf8(L, envp);
+    if (str) {
+      const char* equal = strstr(str, "=");
+      lua_pushlstring(L, str, equal - str);
+      lua_pushstring(L, equal + 1);
+      lua_rawset(L, table);
+      lua_pop(L, 1);
+    }
+    envp += wcslen(envp) + 1;
+  }
+  FreeEnvironmentStringsW(system_env);
+  return 1;
+}
+#endif
 
 
 static int f_terminal_gc(lua_State* L) {
@@ -1531,6 +1611,9 @@ static const luaL_Reg terminal_api[] = {
   { "size",                f_terminal_size                   },
   { "update",              f_terminal_update                 },
   { "exited",              f_terminal_exited                 },
+  #if _WIN32
+  { "getenv",              f_terminal_getenv                 },
+  #endif
   { "cursor",              f_terminal_cursor                 },
   { "focused",             f_terminal_focused                },
   { "mouse_tracking_mode", f_terminal_mouse_tracking_mode    },
