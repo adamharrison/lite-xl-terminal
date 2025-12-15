@@ -28,7 +28,9 @@ local default_config = {
   -- the arguments to pass to your shell; does not work on windows.
   arguments = { },
   -- the environmental variable to set on shell instantiation
-  environment = { },
+  environment = { 
+    PWD = function() return core.root_project().path end,
+  },
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
   -- the newline character to use
@@ -270,9 +272,13 @@ function TerminalView:new(options)
   options = common.merge(common.merge({ shell = default_shell }, config.plugins.terminal), options)
   self.size.y = options.drawer_height
   self.options = options
+  self.options.environment = common.merge(options.environment, {})
+  for k,v in pairs(self.options.environment) do
+    self.options.environment[k] = type(v) == "function" and v() or v
+  end
   if PLATFORM == "Windows" then
     local t = {}
-    for k,v in pairs(common.merge(terminal_native.getenv(), options.environment)) do
+    for k,v in pairs(common.merge(terminal_native.getenv(), self.options.environment)) do
       table.insert(t, k .. "=" .. v)
     end
     self.options.environment = table.concat(t, "\0") .. "\0\0"
