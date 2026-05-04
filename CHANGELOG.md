@@ -1,3 +1,7 @@
+# 1.09
+
+* Ensured that we emit the proper response to a DSR.
+
 # 1.08
 
 * Ensured that `-lutil` is linked, to ensure greater compatibilty with older Ubuntu distributions.
