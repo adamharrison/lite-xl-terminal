@@ -853,7 +853,7 @@ end, {
 })
 
 local function toggle_drawer(root_view, open)
-  if not root_view.terminal_view_node then
+  if not root_view.terminal_view_node or not root_view.terminal_view then
     root_view.terminal_view = TerminalView(config.plugins.terminal)
     root_view.terminal_view_node = root_view:get_active_node_default():split("down", root_view.terminal_view, { y = true }, true)
     root_view.terminal_view_closed = root_view.terminal_view.size.y
