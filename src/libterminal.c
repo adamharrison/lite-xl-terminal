@@ -667,8 +667,8 @@ static int terminal_escape_sequence(terminal_t* terminal, terminal_escape_type_e
       } break;
       case 'n': {
         if (parse_number(&seq[2], 0) == 6) {
-          char buffer[8];
-          int length = snprintf(buffer, sizeof(buffer), "\x1B[%d;%d", view->cursor_y, view->cursor_x);
+          char buffer[12];
+          int length = snprintf(buffer, sizeof(buffer), "\x1B[%d;%dR", view->cursor_y, view->cursor_x);
           terminal_input(terminal, buffer, length);
         } else
           unhandled = 1;
