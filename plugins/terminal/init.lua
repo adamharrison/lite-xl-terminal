@@ -28,7 +28,7 @@ local default_config = {
   arguments = { },
   -- the environmental variable to set on shell instantiation
   environment = { 
-    PWD = function() return core.root_project().path end,
+    PWD = function() return core.root_project and core.root_project().path or core.project_dir end,
   },
   -- the amount of time between line scrolling when we're dragging offscreen
   scrolling_speed = 0.01,
