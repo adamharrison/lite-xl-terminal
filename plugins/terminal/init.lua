@@ -682,7 +682,10 @@ function TerminalView:close()
   if self.terminal then self.terminal:close() end
   local node = core.root_view.root_node:get_node_for_view(self)
   node:close_view(core.root_view.root_node, self)
-  if core.terminal_view == self then core.terminal_view = nil end
+  if core.terminal_view == self then 
+    core.terminal_view = nil 
+    core.terminal_view_node = nil
+  end
   self.terminal = nil
   self.routine = nil
 end
@@ -852,13 +855,14 @@ end, {
 })
 
 local function toggle_drawer(open)
-  if not core.terminal_view_node then
+  if not core.terminal_view  then
     core.terminal_view = TerminalView(config.plugins.terminal)
+  end
+  if not core.terminal_view_node then
     core.terminal_view_node = core.root_view:get_active_node_default():split("down", core.terminal_view, { y = true }, true)
-    core.terminal_view_closed = core.terminal_view.size.y
-  end 
-  if core.terminal_view_closed then
-    core.terminal_view_node:resize("y", core.terminal_view_closed)
+  end
+  if open then
+    core.terminal_view_node:resize("y", core.terminal_view_closed or core.terminal_view.size.y)
     core.terminal_view_closed = nil
   else
     core.terminal_view_closed = core.terminal_view.size.y
@@ -868,7 +872,7 @@ end
 
 command.add(nil, {
   ["terminal:toggle-drawer"] = function()
-    toggle_drawer(not core.terminal_view_closed)
+    toggle_drawer(not core.terminal_view or core.terminal_view_closed ~= nil)
     if not core.terminal_view_closed then core.set_active_view(core.terminal_view) end
   end,
   ["terminal:swap-drawer"] = function()
