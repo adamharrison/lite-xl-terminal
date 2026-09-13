@@ -1010,7 +1010,7 @@ if config.plugins.terminal.inversion_key then
   for i = string.byte('a'), string.byte('z') do
     local keymaps = {}
     for i,v in ipairs(keymap.map["ctrl+" .. string.char(i)] or {}) do
-      if not v:find("terminal") then
+      if type(v) == 'string' and not v:find("terminal") then
         table.insert(keymaps, "terminal:" .. v)
         commands["terminal:" .. v] = function(...) command.perform(v, ...) end
       end
