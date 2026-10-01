@@ -1413,7 +1413,7 @@ static int f_terminal_new(lua_State* L) {
       lua_pop(L, 1);
     }
   #endif
-  int debug = lua_toboolean(L, 7);
+  int debug = lua_toboolean(L, 8);
   terminal_t* terminal = terminal_new(x, y, scrollback_limit, term_env, path, (const char**)arguments, (const char**)environment);
   for (int i = 1; i < 256 && arguments[i]; ++i)
     free(arguments[i]);
