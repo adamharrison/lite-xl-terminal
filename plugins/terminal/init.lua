@@ -421,12 +421,12 @@ local contrast_foreground = {}
 function TerminalView:draw()
   TerminalView.super.draw_background(self, self.options.background)
   if self.terminal then
-    local cursor_x, cursor_y, mode = self.terminal:cursor()
     local space_width = self.options.font:get_width(" ")
 
     local y = self.position.y + self.options.padding.y
     local lh = self.options.font:get_height()
     core.redraw = self:shift_selection_update() or core.redraw
+    local cursor_x, cursor_y, mode = self.terminal:cursor()
 
 
     local selection = self:sorted_selection()
