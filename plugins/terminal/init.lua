@@ -35,7 +35,10 @@ local default_config = {
   -- the newline character to use
   -- We set ICRNL, so that this is translated to `\n` at input time... but this seems to be necessary. `micro`
   -- doesn't allow you to newline if you don't set it to `\r`.
-  newline = ((config.plugins.terminal.shell or default_shell):find("cmd.exe") and "\r\n" or "\r"),
+  -- A value of `nil` indicates that the default newline of the current shell should be used. The defaults are:
+  --   - cmd.exe: `\r\n`
+  --   - all other shells: `\r`
+  newline = nil,
   -- the backspace character to use
   backspace = "\x7F",
   -- the delete character to use
@@ -259,8 +262,6 @@ local function ensureContrastRatio(bg, fg, ratio)
   return fg
 end
 
-
-
 local TerminalView = View:extend()
 
 function TerminalView:get_name() return (self.modified_since_last_focus and "* " or "") .. (self.terminal and self.terminal:name() or "Terminal") end
@@ -269,6 +270,9 @@ function TerminalView:supports_text_input() return true end
 function TerminalView:new(options)
   TerminalView.super.new(self)
   options = common.merge(common.merge({}, config.plugins.terminal), options)
+  if not options.newline then
+    options.newline = options.shell:find("cmd.exe", 1, true) and "\r\n" or "\r"
+  end
   self.size.y = options.drawer_height
   self.options = options
   self.options.environment = common.merge(options.environment, {})
