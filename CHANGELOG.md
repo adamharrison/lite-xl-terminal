@@ -1,3 +1,11 @@
+# 1.10
+
+* Fixed issue with debug toggling.
+* Fixed issue with drawer not always toggling correctly.
+* Fixed issue with cursor not following text immediately upon emission of characters.
+* Fixed issue with keymaps that are functions rather than labelled commands causing a problem with remapping.
+
+
 # 1.09
 
 * Ensured that we emit the proper response to a DSR.
