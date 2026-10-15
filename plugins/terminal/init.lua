@@ -876,7 +876,7 @@ command.add(nil, {
     toggle_drawer(root_view, true)
     root_view:set_active_view(root_view.active_view == root_view.terminal_view and root_view.last_active_view or root_view.terminal_view)
   end,
-  ["terminal:execute"] = function(root_view, text)
+  ["terminal:execute"] = function(root_view, options, text)
     local open_drawer = function(text)
       if not root_view.terminal_view then command.perform("terminal:toggle-drawer", root_view) end
       local target_view = root_view.active_view:is(TerminalView) and root_view.active_view or root_view.terminal_view
